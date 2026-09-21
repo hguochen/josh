@@ -180,6 +180,14 @@ High-Level Component Diagram
 
 **Decision:** MCP server (Option A) — best portability/reliability tradeoff, matches the assistant-mediated-access Assumption without vendor lock-in, and is what Sections 7/8 already assume (`search_skills` / `fetch_skill` / `skill_history` / `publish_skill`).
 
+**Implementation details:**
+- Runs as a local MCP server over stdio, launched as a subprocess by the developer's assistant (standard MCP pattern) — no network exposure beyond its own localhost calls to the Catalog Service.
+- Built with the official MCP SDK — Python, TypeScript, or Java all have official SDKs; kept as a thin translation layer only, all business logic stays in the Catalog Service.
+- Catalog Service base URL is configurable (env var, defaults to `http://localhost:<port>` for the PoC).
+- `fetch_skill` caches downloaded archives locally by `name/version/checksum`, so repeated fetches in a session don't re-download unchanged content.
+- Errors map to clear tool-result messages, not raw HTTP responses/stack traces — e.g. 404 → "not found", 400 → validation explanation — matching the PRD's exception requirements (UC-02/UC-03).
+- `publish_skill` validates the local directory has a `SKILL.md` before calling the server (fail fast locally); final validation is still authoritative server-side.
+
 ---
 
 ### Catalog Service (HTTP API — business logic)
