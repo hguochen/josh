@@ -14,15 +14,15 @@
 - Skill names are the identity/versioning key — publishing under an existing name creates a new version (PRD UC-04); name is effectively unique per skill.
 - No concurrent-write conflict handling — small trusted group, no need for optimistic locking or merge conflict resolution on simultaneous publishes to the same name.
 - Skills are small, text-based artifacts (manifest + a handful of small supporting files), not large binaries.
-- This design targets Phase 1 (MVP) only: FR-01 Publish, FR-02 Discover, FR-03 Retrieve, FR-04 Version. Phase 2 and out-of-scope items (auth, de-duplication) are excluded (PRD §11, §8).
+- This design targets Phase 1 (MVP) only: FR-01 Publish, FR-02 Discover, FR-03 Retrieve, FR-04 Version. Phase 2 and out-of-scope items (auth, de-duplication) are excluded (PRD 11, 8).
 
 ---
 
 ## 2. Outline Approach
 
-- Define Scale: 
-- Derive math: 
-- Design system: 
+- **Define Scale:** Bound by team size (~200 devs), not DAU/MAU traffic modeling.
+- **Derive math:** Skip capacity-planning math — not needed at this scale.
+- **Design system:** Concentrate design effort on the real complexity for this exercise — the data model (skill/manifest/version), the versioning behavior (FR-04), the API surface (FR-01–03), and how an AI assistant reaches the catalog (the PRD's core open dependency, PRD §10) — since that's where the actual decisions live, not in scale math.
 
 ---
 
