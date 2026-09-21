@@ -1,4 +1,6 @@
-# System Design: Skills Catalog
+# System Design: JOSH(Just Our Skills Hub)
+
+_A central hub of skills catalog_
 
 ---
 
@@ -86,7 +88,12 @@
 
 ## 6. Retention
 
-- 
+- **Snapshot frequency:** Weekly full snapshot of the entire catalog store (all skills, all versions, metadata + files).
+- **Snapshot destination:** AWS S3 in production — durable, cheap, standard choice for infrequent-access backups at this data volume. For the Phase 2 PoC, snapshots write to a local directory instead (swappable for S3 later), so the reviewer's machine stays fully offline-runnable per the self-contained Assumption.
+- **Purpose:** Durability only. Snapshots are not a serving path — no querying, indexing, or reads from the snapshot during normal discover/retrieve. Their only job is disaster recovery.
+- **Snapshot content:** Full copy, not incremental — at ~1 MB/day growth (~7 MB/week), a full weekly snapshot is trivially cheap; incremental/diff snapshotting would add complexity with no real benefit at this scale.
+- **Snapshot retention:** Keep all weekly snapshots (or a simple lifecycle rule to move old snapshots to cold storage after N months) — a separate concern from catalog version retention (the catalog itself never deletes a version, regardless of snapshot policy).
+- **Recovery model:** Manual/operator-triggered restore from the latest snapshot if primary storage is lost — not automated failover, consistent with the "no HA requirement" NFR (Section 3).
 
 ---
 
