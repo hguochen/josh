@@ -29,17 +29,26 @@
 ## 3. Scope
 
 **In scope:**
-- 
+- Publish a skill (manifest + supporting files) to the catalog (FR-01)
+- Discover skills via natural-language query through an AI assistant (FR-02)
+- Retrieve a named skill, complete and unchanged (FR-03)
+- Version skills — re-publish under an existing name creates a new version; latest is default, specific versions retrievable, history visible (FR-04)
+- Reject malformed publishes (missing name/description/body) cleanly, no partial writes
 
 **Out of scope:**
-- 
+- Authentication / access control (PRD §8, D3)
+- De-duplication of similar/near-identical skills (PRD §8, D3)
+- Phase 2 additions (undefined, deferred to builder's judgment — PRD §11)
+- A direct human-operated UI as the access path (assistant-mediated only, per Assumptions)
+- Multi-machine/networked deployment across real separate developer machines (single-machine PoC, per Assumptions)
+- Concurrent-write conflict resolution / locking (per Assumptions)
 
 **NFRs:**
-- Latency: 
-- Availability: 
-- Consistency: 
+- Latency: fast enough to feel interactive within an assistant conversation — no numeric target (PRD §7)
+- Availability: not a stated concern — single-machine PoC, no HA requirement
+- Consistency: a retrieved skill must be complete and unchanged from what was published — no silent loss or alteration (PRD §7)
 
-**System type:** 
+**System type:** Versioned artifact/metadata store with natural-language search, exposed to AI assistants as callable tools (not a distributed system)
 
 ---
 
