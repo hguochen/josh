@@ -12,13 +12,15 @@ import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.List;
 import org.springframework.stereotype.Service;
 
 /**
  * design_specifications.md Section 7/8's "Catalog Service": validates publishes,
  * assigns version + checksum, enforces immutability (append-only, never
- * overwrite). One class, grown incrementally — Step 3 adds publish (FR-01);
- * discover/retrieve/version history follow in later steps.
+ * overwrite), matches discovery queries. One class, grown incrementally — Step 3
+ * added publish (FR-01), Step 4 adds discover (FR-02); retrieve/version history
+ * follow in later steps.
  */
 @Service
 public class CatalogService {
@@ -71,6 +73,20 @@ public class CatalogService {
         ));
 
         return new PublishResult(manifest.name(), version, checksum);
+    }
+
+    /**
+     * FR-02: natural-language search against latest versions only (never a stale
+     * older version's text). A blank query always yields no results rather than
+     * hitting FTS5 with an invalid empty MATCH expression.
+     */
+    public List<DiscoverResult> discover(String query) {
+        if (query == null || query.isBlank()) {
+            return List.of();
+        }
+        return repository.searchLatestVersions(query).stream()
+            .map(sv -> new DiscoverResult(sv.name(), sv.description(), sv.version()))
+            .toList();
     }
 
     private void writeArchive(String relativePath, byte[] archiveBytes) {

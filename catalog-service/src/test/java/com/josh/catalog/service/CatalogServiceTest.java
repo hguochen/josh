@@ -14,6 +14,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -115,6 +116,30 @@ class CatalogServiceTest {
         assertThatThrownBy(() -> catalogService.publish(sampleArchiveBytes(), " "))
             .isInstanceOf(InvalidSkillException.class)
             .hasMessageContaining("author");
+    }
+
+    @Test
+    void discoverFindsPublishedSkillByDescriptionWord() throws Exception {
+        catalogService.publish(sampleArchiveBytes(), "Gary Hou");
+
+        List<DiscoverResult> results = catalogService.discover("release");
+
+        assertThat(results).anySatisfy(r -> {
+            assertThat(r.name()).isEqualTo("release-note-draft");
+            assertThat(r.description()).isEqualTo("Draft release notes from commit history");
+            assertThat(r.latestVersion()).isGreaterThanOrEqualTo(1);
+        });
+    }
+
+    @Test
+    void discoverReturnsEmptyForNoMatch() {
+        assertThat(catalogService.discover("nonexistent-topic-abcxyz")).isEmpty();
+    }
+
+    @Test
+    void discoverReturnsEmptyForBlankOrNullQuery() {
+        assertThat(catalogService.discover("   ")).isEmpty();
+        assertThat(catalogService.discover(null)).isEmpty();
     }
 
     private byte[] zipWithoutSkillMd() {

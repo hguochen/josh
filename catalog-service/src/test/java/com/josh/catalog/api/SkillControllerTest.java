@@ -1,6 +1,7 @@
 package com.josh.catalog.api;
 
 import static org.hamcrest.Matchers.containsString;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -23,9 +24,9 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
 /**
- * Step 3 checkpoint: exercise the real HTTP endpoint (POST /v1/skills,
- * design_specifications.md Section 8 API Design) end to end, not just the
- * service layer directly.
+ * Exercises the real HTTP endpoints (design_specifications.md Section 8 API
+ * Design) end to end, not just the service layer directly. Step 3: POST
+ * /v1/skills. Step 4: GET /v1/skills?q=...
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -82,6 +83,36 @@ class SkillControllerTest {
         mockMvc.perform(multipart("/v1/skills").file(archive).param("author", ""))
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.error").value(containsString("author")));
+    }
+
+    @Test
+    void discoverFindsPublishedSkillByQuery() throws Exception {
+        MockMultipartFile archive = new MockMultipartFile(
+            "archive", "release-note-draft.zip", "application/zip", sampleArchiveBytes());
+        mockMvc.perform(multipart("/v1/skills").file(archive).param("author", "Gary Hou"));
+
+        mockMvc.perform(get("/v1/skills").param("q", "release"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$[?(@.name == 'release-note-draft')]").exists())
+            .andExpect(jsonPath("$[?(@.name == 'release-note-draft')].description")
+                .value(org.hamcrest.Matchers.hasItem("Draft release notes from commit history")))
+            .andExpect(jsonPath("$[?(@.name == 'release-note-draft')].latest_version").exists());
+    }
+
+    @Test
+    void discoverWithNoMatchReturnsEmptyArrayNotAnError() throws Exception {
+        mockMvc.perform(get("/v1/skills").param("q", "nonexistent-topic-abcxyz"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$").isArray())
+            .andExpect(jsonPath("$", org.hamcrest.Matchers.hasSize(0)));
+    }
+
+    @Test
+    void discoverWithNoQueryParamReturnsEmptyArrayNotAnError() throws Exception {
+        mockMvc.perform(get("/v1/skills"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$").isArray())
+            .andExpect(jsonPath("$", org.hamcrest.Matchers.hasSize(0)));
     }
 
     private byte[] zipWithoutSkillMd() {

@@ -101,4 +101,20 @@ class CatalogStoreIntegrationTest {
         List<SkillVersion> noMatch = repository.search("nonexistent-topic-xyz");
         assertThat(noMatch).isEmpty();
     }
+
+    @Test
+    void searchLatestVersionsOnlyMatchesTheNewestVersionPerName() {
+        // Unique tokens (not real words) so this can't collide with other tests'
+        // shared-context data or with each other.
+        repository.insert(sampleVersion("changelog-writer-v2", 1, "Handles archaicKeywordZphi formatting"));
+        repository.insert(sampleVersion("changelog-writer-v2", 2, "Handles freshKeywordQtor formatting"));
+
+        List<SkillVersion> staleMatch = repository.searchLatestVersions("archaicKeywordZphi");
+        assertThat(staleMatch).isEmpty();
+
+        List<SkillVersion> currentMatch = repository.searchLatestVersions("freshKeywordQtor");
+        assertThat(currentMatch).hasSize(1);
+        assertThat(currentMatch.get(0).name()).isEqualTo("changelog-writer-v2");
+        assertThat(currentMatch.get(0).version()).isEqualTo(2);
+    }
 }

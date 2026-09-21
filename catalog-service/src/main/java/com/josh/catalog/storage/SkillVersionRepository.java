@@ -81,7 +81,7 @@ public class SkillVersionRepository {
     public List<SkillVersion> search(String query) {
         // Quoted as a literal FTS5 phrase so arbitrary natural-language input (hyphens,
         // colons, "NOT"/"OR", ...) is never parsed as FTS5's own query syntax.
-        String phraseQuery = "\"" + query.replace("\"", "\"\"") + "\"";
+        String phraseQuery = toFts5Phrase(query);
         return jdbcTemplate.query(
             """
             SELECT * FROM skill_versions
@@ -90,5 +90,28 @@ public class SkillVersionRepository {
             ROW_MAPPER,
             phraseQuery
         );
+    }
+
+    /**
+     * FR-02 Discover: match only rows that are BOTH an FTS hit AND the latest
+     * version for their name — never surface a stale older version whose text
+     * happened to match (Section 7 diagram: "read latest versions; match
+     * name/description").
+     */
+    public List<SkillVersion> searchLatestVersions(String query) {
+        String phraseQuery = toFts5Phrase(query);
+        return jdbcTemplate.query(
+            """
+            SELECT sv.* FROM skill_versions sv
+            WHERE sv.id IN (SELECT rowid FROM skill_search WHERE skill_search MATCH ?)
+              AND sv.version = (SELECT MAX(v2.version) FROM skill_versions v2 WHERE v2.name = sv.name)
+            """,
+            ROW_MAPPER,
+            phraseQuery
+        );
+    }
+
+    private String toFts5Phrase(String query) {
+        return "\"" + query.replace("\"", "\"\"") + "\"";
     }
 }
