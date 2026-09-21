@@ -80,9 +80,10 @@ _A central hub of skills catalog_
 | `files` | Supporting files bundled with the skill (filename + content pairs), 0–N | ~10 KB (avg, variable) |
 | `version` | Monotonically increasing version number for this skill name | ~4 B |
 | `created_at` | Timestamp this version was published | ~8 B |
+| `checksum` | SHA-256 digest of the archive, computed at publish time; lets `fetch_skill` verify it received the exact, unaltered version | ~64 B (hex-encoded) |
 | **Total** | | **~15 KB** |
 
-**Dominant field:** `files` (when present) / `instructions` — the metadata fields (`name`, `description`, `author`, `version`, `created_at`) are negligible by comparison; storage sizing should be driven by content size, not row count.
+**Dominant field:** `files` (when present) / `instructions` — the metadata fields (`name`, `description`, `author`, `version`, `created_at`, `checksum`) are negligible by comparison; storage sizing should be driven by content size, not row count.
 
 ---
 
@@ -92,9 +93,10 @@ _A central hub of skills catalog_
 - No hot/warm/cold tiering — data volume is trivial at this scale (~67 publishes/day × ~15 KB ≈ ~1 MB/day, ~365 MB/year), so there's no cost or performance reason to move older versions to cheaper storage.
 - Storage: unbounded (grows with skill/version count), but growth rate is negligible at 200-developer scale — even a decade of history stays well under a few GB.
 - Durability over recency: publishes are rare but each is valuable (a lost skill affects the whole team), so the retention priority is "never lose a version," not "keep only recent data hot/accessible."
-- **Durability design: weekly full snapshots.**
+
+- Durability design: weekly full snapshots.
   - **Frequency:** Weekly full snapshot of the entire catalog store (all skills, all versions, metadata + files).
-  - **Destination:** AWS S3 in production — durable, cheap, standard choice for infrequent-access backups at this data volume. For the Phase 2 PoC, snapshots write to a local directory instead (swappable for S3 later), so the reviewer's machine stays fully offline-runnable per the self-contained Assumption.
+  - **Destination:** AWS S3 in production — durable, cheap, standard choice for infrequent-access backups at this data volume. For the Phase 1/2 PoC, snapshots write to a local directory instead (swappable for S3 later), so the reviewer's machine stays fully offline-runnable per the self-contained Assumption.
   - **Purpose:** Durability only. Snapshots are not a serving path — no querying, indexing, or reads from the snapshot during normal discover/retrieve. Their only job is disaster recovery.
   - **Content:** Full copy, not incremental — at ~1 MB/day growth (~7 MB/week), a full weekly snapshot is trivially cheap; incremental/diff snapshotting would add complexity with no real benefit at this scale.
   - **Snapshot retention:** Keep all weekly snapshots (or a simple lifecycle rule to move old snapshots to cold storage after N months) — a separate concern from catalog version retention (the catalog itself never deletes a version, regardless of snapshot policy).
@@ -106,14 +108,40 @@ _A central hub of skills catalog_
 
 **Request flow:**
 ```
-Client → ... → 
+Developer → AI Assistant (interprets natural-language intent, calls MCP tools)
+          → MCP Adapter (4 tools: search_skills, fetch_skill, skill_history, publish_skill)
+          → Catalog Service (HTTP API — validation, versioning, search)
+          → Catalog Store (immutable Skill Version archives + metadata)
+
+search_skills(query)     → GET  /v1/skills?q=...              → [{name, description, latest_version}, ...]
+fetch_skill(name, ver?)  → GET  /v1/skills/{name}[?version=]  → download ZIP, verify SHA-256, return local path + manifest
+skill_history(name)      → GET  /v1/skills/{name}/versions    → [{version, created_at, author}, ...]
+publish_skill(path)      → POST /v1/skills                    → zip directory, upload; catalog assigns version + checksum
+```
+
+**Skill package format** (what gets zipped/stored per version):
+```
+release-note-draft/
+  SKILL.md              # YAML front matter: name, description; Markdown body = instructions
+  templates/
+    release.md           # supporting file
+
+release-note-draft/v1/   # as persisted by the Catalog Service (not developer-authored)
+  SKILL.md
+  templates/release.md
+  .catalog-meta.json     # { author, version, created_at, checksum } — attached at publish time
 ```
 
 **Major components:**
-- **[Service]** —
-- **[Service]** —
-- **[DB]** —
-- **[Cache]** —
+- **AI Assistant (client)** — not part of this system; calls MCP tools on the developer's behalf (PRD §10 dependency)
+- **MCP Adapter** — runs beside each developer's assistant; exposes `search_skills` / `fetch_skill` / `skill_history` / `publish_skill` as MCP tools, translating them into HTTP calls against the Catalog Service. This is the swappable "access layer" the PRD leaves to the builder.
+- **Catalog Service (HTTP API)** — core logic: validates publishes, assigns version + checksum, enforces immutability (append-only, never overwrite), matches discovery queries, resolves version lookups. Stores/serves each Skill Version as a ZIP archive.
+- **Catalog Store (DB)** — persists Skill Version records (metadata) and archive blobs as an immutable, append-only log; SQL vs NoSQL choice in Section 8
+- **Snapshot Job** — periodic (weekly) background process writing full catalog snapshots to a local directory / S3, per Section 6
+
+**Integrity guarantee:** `fetch_skill` downloads the exact archive published and verifies its SHA-256 before returning it — the assistant never recreates, summarizes, or alters a skill; it only ever hands back a byte-identical, previously-published version. This directly satisfies the Consistency NFR (Section 3).
+
+No cache layer — throughput is trivial at this scale (Section 4).
 
 ---
 
@@ -138,11 +166,20 @@ Client → ... →
 ### API Design
 
 ```
-GET    /v1/...    →
-POST   /v1/...    →
-PUT    /v1/...    →
-DELETE /v1/...    →
+POST /v1/skills                          publish archive
+GET  /v1/skills?q=release+notes          search latest versions
+GET  /v1/skills/{name}                   download latest archive
+GET  /v1/skills/{name}?version=1         download an older archive
+GET  /v1/skills/{name}/versions          list version history
 ```
+
+No `PUT`/`DELETE` — the catalog is append-only (Section 6): publishing under an existing `name` always creates a new version via `POST`, and nothing is ever updated or removed in place.
+
+MCP tools wrap these endpoints for the assistant:
+- `search_skills(query)` — returns name, description, and latest version
+- `fetch_skill(name, version?)` — downloads the complete ZIP, verifies its SHA-256, returns the local archive path plus its manifest
+- `skill_history(name)` — returns retained versions
+- `publish_skill(path)` — optional convenience tool; a CLI can also publish directly against the HTTP API
 
 ---
 
