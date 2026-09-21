@@ -69,18 +69,18 @@
 ## 5. Data
 
 **Skill Version fields:**
-| Field | Size |
-|---|---|
-| name | ~50 B |
-| description | ~200 B |
-| author name | ~50 B |
-| instruction body (manifest) | ~5 KB |
-| supporting files (0–N, filename + content) | ~10 KB (avg, variable) |
-| version number | ~4 B |
-| created_at | ~8 B |
-| **Total** | **~15 KB** |
+| Field | Description | Size |
+|---|---|---|
+| `name` | Unique identifier for the skill; used as the versioning key (same name = new version, not a new skill) | ~50 B |
+| `description` | Short human-readable summary used for natural-language discovery/search matching | ~200 B |
+| `author` | Name of the developer who published this version | ~50 B |
+| `instructions` | The manifest's instruction body — the actual reusable AI-assistant instructions | ~5 KB |
+| `files` | Supporting files bundled with the skill (filename + content pairs), 0–N | ~10 KB (avg, variable) |
+| `version` | Monotonically increasing version number for this skill name | ~4 B |
+| `created_at` | Timestamp this version was published | ~8 B |
+| **Total** | | **~15 KB** |
 
-**Dominant field:** supporting files (when present) / instruction body — the metadata fields (name, description, author, version, timestamp) are negligible by comparison; storage sizing should be driven by content size, not row count.
+**Dominant field:** `files` (when present) / `instructions` — the metadata fields (`name`, `description`, `author`, `version`, `created_at`) are negligible by comparison; storage sizing should be driven by content size, not row count.
 
 ---
 
