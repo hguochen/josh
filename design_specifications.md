@@ -160,7 +160,26 @@ FR-04 Version flow
 High-Level Component Diagram
 ![High-level component diagram](assets/high-level-component-diagram.webp)
 
+### Language Choice
 
+**Problem:** The Catalog Service, MCP Adapter, and Snapshot Job all need one implementation language. The official MCP SDK exists for Python, TypeScript, and Java (per Section 8's MCP Adapter details) — all three are technically viable, so the decision comes down to ecosystem fit for this design's specific needs: an HTTP API + embedded SQLite/FTS5 + ZIP handling + correctness-heavy validation logic.
+
+**Options:**
+
+| | A: Java | B: Python | C: TypeScript/Node.js |
+|---|---|---|---|
+| MCP SDK | Official, built with Spring AI; pairs directly with Spring Boot | Official reference SDK, lightweight | Official reference SDK (original) |
+| Type safety | Strong, compile-time enforced | Optional (type hints), not enforced at compile time | Compile-time only, erased at runtime |
+| SQLite + FTS5 support | Mature JDBC driver (`sqlite-jdbc`) | Built-in `sqlite3` module, also mature | Less mature FTS5 tooling |
+| ZIP handling | Built into the standard library (`java.util.zip`) | Built into the standard library (`zipfile`) | Requires a third-party package |
+| Shared stack (Service + Adapter + Snapshot Job) | All on the JVM — one toolchain (Spring Boot, MCP Java SDK, `@Scheduled`) | All in Python — one toolchain | All in Node — one toolchain |
+| Production headroom past PoC | Very well-trodden (Spring Data, Spring Cloud) if it ever needs to grow beyond Section 8's PoC choices | Good, but often needs a hardening pass for production loads | Good for I/O-bound workloads |
+
+**Decision:** Java (Option A).
+- Compile-time type safety directly reinforces this design's core correctness requirements — immutable versioning, checksum-verified integrity, "nothing partial stored" validation (FR-01) — in a way Python's optional typing and TypeScript's erased-at-runtime typing don't.
+- The MCP Java SDK's direct collaboration with Spring AI means the Catalog Service (Spring Boot) and MCP Adapter share one mature toolchain end to end.
+- The standard library/ecosystem (JDBC, `java.util.zip`, `@Scheduled`) covers every Section 8 component without third-party gap-filling.
+- Python and TypeScript are both fully capable choices — Java wins here specifically because this design leans on correctness guarantees (Section 9) over raw prototyping speed.
 
 ---
 
