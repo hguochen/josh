@@ -52,16 +52,7 @@
 
 ---
 
-## 4. Scale
-
-- DAU:
-- MAU:
-- Concurrent users:
-- Global/regional:
-
----
-
-## 5. Behavior
+## 4. Behavior
 
 | Action | Per User/Day | Total/Day |
 |---|---|---|
@@ -74,7 +65,7 @@
 
 ---
 
-## 6. Data
+## 5. Data
 
 **[Object] fields:**
 | Field | Size |
@@ -87,13 +78,13 @@
 
 ---
 
-## 7. Retention
+## 6. Retention
 
 - 
 
 ---
 
-## 8. High Level Design
+## 7. High Level Design
 
 **Request flow:**
 ```
@@ -108,7 +99,7 @@ Client → ... →
 
 ---
 
-## 9. Component Deep Dive
+## 8. Component Deep Dive
 
 ### Hardest component: [NAME]
 
@@ -147,7 +138,7 @@ DELETE /v1/...    →
 
 ---
 
-## 10. Tradeoffs
+## 9. Tradeoffs
 
 **Consistency vs Availability:**
 - 
@@ -157,7 +148,7 @@ DELETE /v1/...    →
 
 ---
 
-## 11. Summary
+## 10. Summary
 
 | Decision | Choice |
 |---|---|
