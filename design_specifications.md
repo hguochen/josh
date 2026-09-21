@@ -56,12 +56,13 @@
 
 | Action | Per User/Day | Total/Day |
 |---|---|---|
-|  |  |  |
-|  |  |  |
-|  |  |  |
+| Publish (new skill or new version) | ~0.05 (≈1 every 3 weeks) | ~10 |
+| Discover (search) | ~2 | ~400 |
+| Retrieve (fetch by name) | ~1 | ~200 |
 
-- Read:Write ratio ≈
-- Peak multiplier:
+- Read:Write ratio ≈ 60:1 (discover + retrieve vs. publish) — heavily read-dominated
+- Peak multiplier: ~2–3x during working hours (internal dev tool, not 24/7 global traffic); absolute peak is trivial (~15–20 requests/hour) — no caching/sharding needed for throughput
+- Durability: low write volume ≠ low durability need — a lost publish is a lost skill for the whole team, so data must still be replicated/backed up even though the *rate* of writes never demands it
 
 ---
 
