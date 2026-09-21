@@ -68,14 +68,19 @@
 
 ## 5. Data
 
-**[Object] fields:**
+**Skill Version fields:**
 | Field | Size |
 |---|---|
-|  |  |
-|  |  |
-| **Total** |  |
+| name | ~50 B |
+| description | ~200 B |
+| author name | ~50 B |
+| instruction body (manifest) | ~5 KB |
+| supporting files (0–N, filename + content) | ~10 KB (avg, variable) |
+| version number | ~4 B |
+| created_at | ~8 B |
+| **Total** | **~15 KB** |
 
-**Dominant field:** 
+**Dominant field:** supporting files (when present) / instruction body — the metadata fields (name, description, author, version, timestamp) are negligible by comparison; storage sizing should be driven by content size, not row count.
 
 ---
 
