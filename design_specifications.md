@@ -166,19 +166,83 @@ High-Level Component Diagram
 
 ## 8. Component Deep Dive
 
-### Hardest component: [NAME]
+### Hardest component: MCP Adapter (assistant-to-catalog access layer)
 
-**Problem:** 
+**Problem:** The PRD leaves "how the assistant reaches the catalog" entirely to the builder (PRD §10) — this is the system's core open dependency. A bespoke integration per assistant vendor doesn't scale, and a plain CLI requires the assistant to correctly construct shell invocations from natural language rather than making structured, typed calls.
 
 **Options:**
 
-| | Option A | Option B |
-|---|---|---|
-| Latency |  |  |
-| Throughput |  |  |
-| Tradeoff |  |  |
+| | A: MCP server | B: Plain CLI | C: Custom per-vendor function-calling |
+|---|---|---|---|
+| Portability | High — any MCP-compatible assistant, growing ecosystem standard | Medium — needs shell/tool-execution capability, not uniformly available | Low — locked to one assistant/vendor |
+| Reliability | High — typed tool schema constrains inputs, fewer malformed calls | Medium/Low — assistant must construct correct CLI syntax from NL | High — fully controlled schema |
+| Effort | Low/Medium — one adapter, reusable across assistants | Low — simple, familiar tooling | High — re-implemented per vendor |
 
-**Decision:** 
+**Decision:** MCP server (Option A) — best portability/reliability tradeoff, matches the assistant-mediated-access Assumption without vendor lock-in, and is what Sections 7/8 already assume (`search_skills` / `fetch_skill` / `skill_history` / `publish_skill`).
+
+---
+
+### Catalog Service (HTTP API — business logic)
+
+**Problem:** Needs to run the actual validation/versioning/search logic, but must stay easy enough that a reviewer can start the whole system from a short README with no infra setup (self-contained Assumption).
+
+**Options:**
+
+| | A: Single-process lightweight HTTP server | B: Multi-process/service framework | C: Serverless (Lambda + API Gateway) |
+|---|---|---|---|
+| Setup effort (reviewer's machine) | Low — one process, one command | High — multiple processes/config | High — cloud account/deploy step |
+| Matches self-contained Assumption | Yes | Partially | No — external cloud dependency |
+| Production headroom | Adequate — same code can scale later if needed | High (unneeded at this scale) | High (unneeded at this scale) |
+
+**Decision:** Single-process lightweight HTTP server (A) — matches the self-contained Assumption and Section 4's trivial-throughput conclusion; B and C add operational complexity this exercise doesn't need.
+
+---
+
+### Catalog Store (deployment topology — embedded vs. standalone)
+
+**Problem:** The SQL vs NoSQL Decision below settles the data model shape (SQLite + filesystem blobs). The separate question here is deployment topology — embedded in-process, or a standalone DB server?
+
+**Options:**
+
+| | A: Embedded SQLite file | B: Standalone DB server (Postgres) | C: Managed cloud DB (RDS) |
+|---|---|---|---|
+| Setup effort | None — a file on disk | Medium — separate install/process | High — cloud account, network |
+| Matches self-contained Assumption | Yes | No | No |
+| Needed at 200-dev, ~15 KB/row scale? | More than sufficient | Overkill | Overkill |
+
+**Decision:** Embedded SQLite (A). If the system ever moved beyond single-machine (out of scope per Assumptions), Postgres is the natural swap — same relational shape, no schema redesign.
+
+---
+
+### Snapshot Job (scheduling mechanism)
+
+**Problem:** The weekly snapshot needs a trigger that runs reliably without an always-on scheduling service, and without a cloud dependency for the PoC.
+
+**Options:**
+
+| | A: OS-level cron | B: In-process scheduler (timer thread in Catalog Service) | C: Cloud-native scheduler (EventBridge) |
+|---|---|---|---|
+| Depends on Catalog Service staying up | No — decoupled | Yes — missed if service is down | No — decoupled |
+| Matches self-contained Assumption | Yes | Yes | No — external cloud dependency |
+| Production-realistic | Yes — cron is a standard prod pattern too | Less — fragile scheduling model | Yes |
+
+**Decision:** OS-level cron invoking a standalone snapshot script (A) — decoupled from the service process, no extra runtime dependency. Production would swap to a cloud-native scheduler (C) alongside real S3, mirroring the same PoC/prod substitution already made for storage (Section 6).
+
+---
+
+### Backup Destination (where snapshots are written)
+
+**Problem:** Snapshots need a destination durable enough to survive loss of the primary Catalog Store, while the PoC stays fully offline-runnable.
+
+**Options:**
+
+| | A: AWS S3 | B: Local directory / second disk | C: Other cloud object store (GCS, Azure Blob) |
+|---|---|---|---|
+| Durability | Very high (11 nines) | Low — same machine, no protection against machine-level loss | Very high |
+| Matches self-contained Assumption | No — needs AWS account/network | Yes | No |
+| Reason to prefer | Industry-standard, cheap at this volume | Simplicity for PoC | No stated preference in PRD/Assumptions |
+
+**Decision:** AWS S3 (A) is the production target (per Section 6); local directory (B) is the PoC substitution. No reason to introduce Option C — nothing favors it over S3.
 
 ---
 
@@ -206,9 +270,9 @@ MCP tools wrap these endpoints for the assistant:
 
 | Store | Choice | Reason |
 |---|---|---|
-|  |  |  |
-|  |  |  |
-|  |  |  |
+| Skill Version metadata (name, description, author, version, created_at, checksum) | SQL (SQLite) | Relational by nature — one name has many versions; needs "latest version for name" / "all versions for name" queries. Trivial row count at 200-dev scale; SQLite needs no server process, fitting the self-contained/offline-runnable Assumption. |
+| Skill archive blobs (ZIP files) | Filesystem | Opaque immutable byte blobs, not queried — access pattern is a direct lookup by name+version, not a query. Storing large blobs in DB rows is an anti-pattern; flat files are simpler and mirror cleanly into the weekly snapshot (Section 6). |
+| Discovery/search index (match query against name/description) | SQL (SQLite FTS5) | Corpus is small (low hundreds/thousands of skills, ~2,000 discover calls/day) — a lightweight full-text extension on the same SQLite DB is sufficient. A dedicated search engine or vector DB would be over-engineering for this scale/exercise. |
 
 ---
 
