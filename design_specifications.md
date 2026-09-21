@@ -88,6 +88,10 @@ _A central hub of skills catalog_
 
 ## 6. Retention
 
+- All versions of every skill are retained indefinitely — no pruning/expiration. Deleting a version would violate the "no silent loss" consistency requirement (PRD §7) and defeats the purpose of version history (FR-04).
+- No hot/warm/cold tiering — data volume is trivial at this scale (~67 publishes/day × ~15 KB ≈ ~1 MB/day, ~365 MB/year), so there's no cost or performance reason to move older versions to cheaper storage.
+- Storage: unbounded (grows with skill/version count), but growth rate is negligible at 200-developer scale — even a decade of history stays well under a few GB.
+- Durability over recency: publishes are rare but each is valuable (a lost skill affects the whole team), so the retention priority is "never lose a version," not "keep only recent data hot/accessible."
 - **Snapshot frequency:** Weekly full snapshot of the entire catalog store (all skills, all versions, metadata + files).
 - **Snapshot destination:** AWS S3 in production — durable, cheap, standard choice for infrequent-access backups at this data volume. For the Phase 2 PoC, snapshots write to a local directory instead (swappable for S3 later), so the reviewer's machine stays fully offline-runnable per the self-contained Assumption.
 - **Purpose:** Durability only. Snapshots are not a serving path — no querying, indexing, or reads from the snapshot during normal discover/retrieve. Their only job is disaster recovery.
