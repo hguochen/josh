@@ -18,9 +18,9 @@ import org.springframework.stereotype.Service;
 /**
  * design_specifications.md Section 7/8's "Catalog Service": validates publishes,
  * assigns version + checksum, enforces immutability (append-only, never
- * overwrite), matches discovery queries. One class, grown incrementally — Step 3
- * added publish (FR-01), Step 4 adds discover (FR-02); retrieve/version history
- * follow in later steps.
+ * overwrite), matches discovery queries, resolves version lookups. One class,
+ * grown incrementally — Step 3 added publish (FR-01), Step 4 discover (FR-02),
+ * Step 5 retrieve (FR-03); version history follows in Step 6.
  */
 @Service
 public class CatalogService {
@@ -87,6 +87,38 @@ public class CatalogService {
         return repository.searchLatestVersions(query).stream()
             .map(sv -> new DiscoverResult(sv.name(), sv.description(), sv.version()))
             .toList();
+    }
+
+    /**
+     * FR-03: fetch the exact, unaltered archive for a name — latest version if
+     * `version` is absent, otherwise that specific version. Reading the bytes back
+     * from disk (rather than trusting anything cached) means what's returned is
+     * genuinely what's on the filesystem right now.
+     */
+    public RetrieveResult retrieve(String name, Integer version) {
+        SkillVersion skillVersion = (version == null
+                ? repository.findLatestVersion(name)
+                : repository.findVersion(name, version))
+            .orElseThrow(() -> new SkillNotFoundException(notFoundMessage(name, version)));
+
+        byte[] archiveBytes = readArchive(skillVersion.archivePath());
+
+        return new RetrieveResult(skillVersion.name(), skillVersion.version(), skillVersion.checksum(), archiveBytes);
+    }
+
+    private String notFoundMessage(String name, Integer version) {
+        return version == null
+            ? "No skill named '" + name + "'"
+            : "No version " + version + " of skill '" + name + "'";
+    }
+
+    private byte[] readArchive(String relativePath) {
+        Path source = storageProperties.archivesDir().resolve(relativePath);
+        try {
+            return Files.readAllBytes(source);
+        } catch (IOException e) {
+            throw new UncheckedIOException("Failed to read archive " + source, e);
+        }
     }
 
     private void writeArchive(String relativePath, byte[] archiveBytes) {

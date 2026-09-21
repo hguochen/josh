@@ -3,13 +3,16 @@ package com.josh.catalog.api;
 import com.josh.catalog.service.CatalogService;
 import com.josh.catalog.service.DiscoverResult;
 import com.josh.catalog.service.PublishResult;
+import com.josh.catalog.service.RetrieveResult;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.List;
+import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -46,5 +49,22 @@ public class SkillController {
     @GetMapping
     public List<DiscoverResult> discover(@RequestParam(name = "q", defaultValue = "") String query) {
         return catalogService.discover(query);
+    }
+
+    @GetMapping("/{name}")
+    public ResponseEntity<byte[]> retrieve(
+        @PathVariable String name,
+        @RequestParam(required = false) Integer version
+    ) {
+        RetrieveResult result = catalogService.retrieve(name, version);
+
+        return ResponseEntity.ok()
+            .contentType(MediaType.valueOf("application/zip"))
+            .eTag("\"" + result.checksum() + "\"")
+            .header("Content-Disposition", ContentDisposition.attachment()
+                .filename(result.name() + "-v" + result.version() + ".zip")
+                .build()
+                .toString())
+            .body(result.archiveBytes());
     }
 }

@@ -142,6 +142,46 @@ class CatalogServiceTest {
         assertThat(catalogService.discover(null)).isEmpty();
     }
 
+    @Test
+    void retrieveLatestReturnsExactPublishedArchiveBytes() throws Exception {
+        byte[] archiveBytes = sampleArchiveBytes();
+        PublishResult published = catalogService.publish(archiveBytes, "Gary Hou");
+
+        RetrieveResult retrieved = catalogService.retrieve("release-note-draft", null);
+
+        assertThat(retrieved.version()).isEqualTo(published.version());
+        assertThat(retrieved.checksum()).isEqualTo(published.checksum());
+        assertThat(retrieved.archiveBytes()).isEqualTo(archiveBytes);
+    }
+
+    @Test
+    void retrieveSpecificVersionReturnsThatVersionNotLatest() throws Exception {
+        byte[] archiveBytes = sampleArchiveBytes();
+        PublishResult first = catalogService.publish(archiveBytes, "Gary Hou");
+        catalogService.publish(archiveBytes, "Gary Hou"); // becomes the new latest
+
+        RetrieveResult retrieved = catalogService.retrieve("release-note-draft", first.version());
+
+        assertThat(retrieved.version()).isEqualTo(first.version());
+        assertThat(retrieved.checksum()).isEqualTo(first.checksum());
+    }
+
+    @Test
+    void retrieveUnknownNameThrowsNotFound() {
+        assertThatThrownBy(() -> catalogService.retrieve("no-such-skill-xyz", null))
+            .isInstanceOf(SkillNotFoundException.class)
+            .hasMessageContaining("no-such-skill-xyz");
+    }
+
+    @Test
+    void retrieveUnknownVersionOfExistingSkillThrowsNotFound() throws Exception {
+        catalogService.publish(sampleArchiveBytes(), "Gary Hou");
+
+        assertThatThrownBy(() -> catalogService.retrieve("release-note-draft", 9999))
+            .isInstanceOf(SkillNotFoundException.class)
+            .hasMessageContaining("9999");
+    }
+
     private byte[] zipWithoutSkillMd() {
         ByteArrayOutputStream buffer = new ByteArrayOutputStream();
         try (ZipOutputStream zip = new ZipOutputStream(buffer)) {

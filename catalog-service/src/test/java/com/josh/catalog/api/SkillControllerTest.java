@@ -3,6 +3,8 @@ package com.josh.catalog.api;
 import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -11,6 +13,8 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Path;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 import org.junit.jupiter.api.Test;
@@ -113,6 +117,49 @@ class SkillControllerTest {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$").isArray())
             .andExpect(jsonPath("$", org.hamcrest.Matchers.hasSize(0)));
+    }
+
+    @Test
+    void retrieveLatestReturnsTheArchiveWithMatchingETag() throws Exception {
+        byte[] archiveBytes = sampleArchiveBytes();
+        MockMultipartFile archive = new MockMultipartFile(
+            "archive", "release-note-draft.zip", "application/zip", archiveBytes);
+
+        String publishResponse = mockMvc.perform(multipart("/v1/skills").file(archive).param("author", "Gary Hou"))
+            .andReturn().getResponse().getContentAsString();
+        String checksum = extractJsonStringField(publishResponse, "checksum");
+
+        mockMvc.perform(get("/v1/skills/release-note-draft"))
+            .andExpect(status().isOk())
+            .andExpect(header().string("ETag", "\"" + checksum + "\""))
+            .andExpect(content().contentType("application/zip"))
+            .andExpect(content().bytes(archiveBytes));
+    }
+
+    @Test
+    void retrieveUnknownSkillReturns404WithExplanation() throws Exception {
+        mockMvc.perform(get("/v1/skills/no-such-skill-xyz"))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.error").value(containsString("no-such-skill-xyz")));
+    }
+
+    @Test
+    void retrieveUnknownVersionReturns404WithExplanation() throws Exception {
+        MockMultipartFile archive = new MockMultipartFile(
+            "archive", "release-note-draft.zip", "application/zip", sampleArchiveBytes());
+        mockMvc.perform(multipart("/v1/skills").file(archive).param("author", "Gary Hou"));
+
+        mockMvc.perform(get("/v1/skills/release-note-draft").param("version", "99999"))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.error").value(containsString("99999")));
+    }
+
+    private String extractJsonStringField(String json, String field) {
+        Matcher matcher = Pattern.compile("\"" + field + "\"\\s*:\\s*\"([^\"]+)\"").matcher(json);
+        if (!matcher.find()) {
+            throw new IllegalStateException("Field '" + field + "' not found in " + json);
+        }
+        return matcher.group(1);
     }
 
     private byte[] zipWithoutSkillMd() {
