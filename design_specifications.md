@@ -278,11 +278,13 @@ MCP tools wrap these endpoints for the assistant:
 
 ## 9. Tradeoffs
 
-**Consistency vs Availability:**
-- 
+**Durability vs. Complexity/Cost:**
+- Weekly snapshots accept up to ~7 days of possible data loss (RPO) instead of real-time replication — fine given publish volume is tiny (~67/day).
+- Never deleting a version trades unbounded storage for zero risk of losing history — cheap tradeoff at ~365 MB/year growth.
 
-**Latency vs Cost:**
-- 
+**Simplicity (PoC) vs. Production-readiness:**
+- Every Section 8 choice (SQLite, local dir, OS cron, single-process server) picked the simpler offline-runnable option over its production counterpart (Postgres, S3, cloud scheduler), with the swap noted at each point.
+- No caching/sharding — traded away scale headroom that isn't needed at this load (Section 4).
 
 ---
 
