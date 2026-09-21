@@ -92,12 +92,13 @@ _A central hub of skills catalog_
 - No hot/warm/cold tiering — data volume is trivial at this scale (~67 publishes/day × ~15 KB ≈ ~1 MB/day, ~365 MB/year), so there's no cost or performance reason to move older versions to cheaper storage.
 - Storage: unbounded (grows with skill/version count), but growth rate is negligible at 200-developer scale — even a decade of history stays well under a few GB.
 - Durability over recency: publishes are rare but each is valuable (a lost skill affects the whole team), so the retention priority is "never lose a version," not "keep only recent data hot/accessible."
-- **Snapshot frequency:** Weekly full snapshot of the entire catalog store (all skills, all versions, metadata + files).
-- **Snapshot destination:** AWS S3 in production — durable, cheap, standard choice for infrequent-access backups at this data volume. For the Phase 2 PoC, snapshots write to a local directory instead (swappable for S3 later), so the reviewer's machine stays fully offline-runnable per the self-contained Assumption.
-- **Purpose:** Durability only. Snapshots are not a serving path — no querying, indexing, or reads from the snapshot during normal discover/retrieve. Their only job is disaster recovery.
-- **Snapshot content:** Full copy, not incremental — at ~1 MB/day growth (~7 MB/week), a full weekly snapshot is trivially cheap; incremental/diff snapshotting would add complexity with no real benefit at this scale.
-- **Snapshot retention:** Keep all weekly snapshots (or a simple lifecycle rule to move old snapshots to cold storage after N months) — a separate concern from catalog version retention (the catalog itself never deletes a version, regardless of snapshot policy).
-- **Recovery model:** Manual/operator-triggered restore from the latest snapshot if primary storage is lost — not automated failover, consistent with the "no HA requirement" NFR (Section 3).
+- **Durability design: weekly full snapshots.**
+  - **Frequency:** Weekly full snapshot of the entire catalog store (all skills, all versions, metadata + files).
+  - **Destination:** AWS S3 in production — durable, cheap, standard choice for infrequent-access backups at this data volume. For the Phase 2 PoC, snapshots write to a local directory instead (swappable for S3 later), so the reviewer's machine stays fully offline-runnable per the self-contained Assumption.
+  - **Purpose:** Durability only. Snapshots are not a serving path — no querying, indexing, or reads from the snapshot during normal discover/retrieve. Their only job is disaster recovery.
+  - **Content:** Full copy, not incremental — at ~1 MB/day growth (~7 MB/week), a full weekly snapshot is trivially cheap; incremental/diff snapshotting would add complexity with no real benefit at this scale.
+  - **Snapshot retention:** Keep all weekly snapshots (or a simple lifecycle rule to move old snapshots to cold storage after N months) — a separate concern from catalog version retention (the catalog itself never deletes a version, regardless of snapshot policy).
+  - **Recovery model:** Manual/operator-triggered restore from the latest snapshot if primary storage is lost — not automated failover, consistent with the "no HA requirement" NFR (Section 3).
 
 ---
 
