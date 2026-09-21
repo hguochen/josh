@@ -143,6 +143,18 @@ release-note-draft/v1/   # as persisted by the Catalog Service (not developer-au
 
 No cache layer — throughput is trivial at this scale (Section 4).
 
+**Flow diagrams:**
+
+![FR-01 Publish flow](assets/fr-01-publish-flow.webp)
+
+![FR-02 Discover flow](assets/fr-02-discover-flow.webp)
+
+![FR-03 Retrieve flow](assets/fr-03-retrieve-flow.webp)
+
+![FR-04 Version flow](assets/fr-04-version-flow.webp)
+
+(Editable source: `diagrams/fr-flows.excalidraw`)
+
 ---
 
 ## 8. Component Deep Dive
