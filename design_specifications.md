@@ -1,4 +1,4 @@
-# System Design: JOSH(Just Our Skills Hub)
+# System Design: JOSH (Just Our Skills Hub)
 
 _A central hub of skills catalog_
 
@@ -63,7 +63,7 @@ _A central hub of skills catalog_
 | Retrieve (fetch by name) | 5 | ~1,000 |
 
 - Read:Write ratio ≈ 45:1 (discover + retrieve vs. publish) — heavily read-dominated
-- Peak multiplier: ~2–3x during working hours (internal dev tool, not 24/7 global traffic); absolute peak is still modest (~125–190 requests/hour) — no caching/sharding needed for throughput
+- Peak multiplier: ~2–3x on the flat 24-hour average (internal dev tool, not 24/7 global traffic) — 3,000 discover+retrieve/day ÷ 24h ≈ 125/hr average, so peak ≈ ~250–375 requests/hour during working hours; still trivial — no caching/sharding needed for throughput
 - Durability: low write volume ≠ low durability need — a lost publish is a lost skill for the whole team, so data must still be replicated/backed up even though the *rate* of writes never demands it
 
 ---
@@ -96,7 +96,7 @@ _A central hub of skills catalog_
 
 - Durability design: weekly full snapshots.
   - **Frequency:** Weekly full snapshot of the entire catalog store (all skills, all versions, metadata + files).
-  - **Destination:** AWS S3 in production — durable, cheap, standard choice for infrequent-access backups at this data volume. For the Phase 1/2 PoC, snapshots write to a local directory instead (swappable for S3 later), so the reviewer's machine stays fully offline-runnable per the self-contained Assumption.
+  - **Destination:** AWS S3 in production — durable, cheap, standard choice for infrequent-access backups at this data volume. For the PoC, snapshots write to a local directory instead (swappable for S3 later), so the reviewer's machine stays fully offline-runnable per the self-contained Assumption.
   - **Purpose:** Durability only. Snapshots are not a serving path — no querying, indexing, or reads from the snapshot during normal discover/retrieve. Their only job is disaster recovery.
   - **Content:** Full copy, not incremental — at ~1 MB/day growth (~7 MB/week), a full weekly snapshot is trivially cheap; incremental/diff snapshotting would add complexity with no real benefit at this scale.
   - **Snapshot retention:** Keep all weekly snapshots (or a simple lifecycle rule to move old snapshots to cold storage after N months) — a separate concern from catalog version retention (the catalog itself never deletes a version, regardless of snapshot policy).
@@ -131,6 +131,8 @@ release-note-draft/v1/   # as persisted by the Catalog Service (not developer-au
   templates/release.md
   .catalog-meta.json     # { author, version, created_at, checksum } — attached at publish time
 ```
+
+At publish time, the Catalog Service parses `SKILL.md`'s front matter and copies `name`/`description` into the SQL metadata row (Section 8, SQL vs NoSQL Decision) so discovery search doesn't need to unzip every archive. The archive itself — including the original `SKILL.md` — stays the single source of truth on the filesystem; the SQL columns are a queryable index over it, not a separate copy of record.
 
 **Major components:**
 - **AI Assistant (client)** — not part of this system; calls MCP tools on the developer's behalf (PRD 10 dependency)
@@ -172,13 +174,13 @@ High-Level Component Diagram
 | Type safety | Strong, compile-time enforced | Optional (type hints), not enforced at compile time | Compile-time only, erased at runtime |
 | SQLite + FTS5 support | Mature JDBC driver (`sqlite-jdbc`) | Built-in `sqlite3` module, also mature | Less mature FTS5 tooling |
 | ZIP handling | Built into the standard library (`java.util.zip`) | Built into the standard library (`zipfile`) | Requires a third-party package |
-| Shared stack (Service + Adapter + Snapshot Job) | All on the JVM — one toolchain (Spring Boot, MCP Java SDK, `@Scheduled`) | All in Python — one toolchain | All in Node — one toolchain |
+| Shared stack (Service + Adapter + Snapshot Job) | All on the JVM — one toolchain (Spring Boot, MCP Java SDK, a standalone `main` class for the snapshot script) | All in Python — one toolchain | All in Node — one toolchain |
 | Production headroom past PoC | Very well-trodden (Spring Data, Spring Cloud) if it ever needs to grow beyond Section 8's PoC choices | Good, but often needs a hardening pass for production loads | Good for I/O-bound workloads |
 
 **Decision:** Java (Option A).
 - Compile-time type safety directly reinforces this design's core correctness requirements — immutable versioning, checksum-verified integrity, "nothing partial stored" validation (FR-01) — in a way Python's optional typing and TypeScript's erased-at-runtime typing don't.
 - The MCP Java SDK's direct collaboration with Spring AI means the Catalog Service (Spring Boot) and MCP Adapter share one mature toolchain end to end.
-- The standard library/ecosystem (JDBC, `java.util.zip`, `@Scheduled`) covers every Section 8 component without third-party gap-filling.
+- The standard library/ecosystem (JDBC, `java.util.zip`, a plain `main`-method entry point for the OS-cron-invoked snapshot script) covers every Section 8 component without third-party gap-filling.
 - Python and TypeScript are both fully capable choices — Java wins here specifically because this design leans on correctness guarantees (Section 9) over raw prototyping speed.
 
 ---
@@ -203,6 +205,7 @@ High-Level Component Diagram
 - Runs as a local MCP server over stdio, launched as a subprocess by the developer's assistant (standard MCP pattern) — no network exposure beyond its own localhost calls to the Catalog Service.
 - Built with the official MCP SDK — Python, TypeScript, or Java all have official SDKs; kept as a thin translation layer only, all business logic stays in the Catalog Service.
 - Catalog Service base URL is configurable (env var, defaults to `http://localhost:<port>` for the PoC).
+- `fetch_skill` verifies the downloaded archive's SHA-256 against the `checksum` returned by the Catalog Service before handing it back — the integrity guarantee described in Section 7 lives here, not on the server.
 - `fetch_skill` caches downloaded archives locally by `name/version/checksum`, so repeated fetches in a session don't re-download unchanged content.
 - Errors map to clear tool-result messages, not raw HTTP responses/stack traces — e.g. 404 → "not found", 400 → validation explanation — matching the PRD's exception requirements (UC-02/UC-03).
 - `publish_skill` validates the local directory has a `SKILL.md` before calling the server (fail fast locally); final validation is still authoritative server-side.
