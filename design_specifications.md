@@ -300,6 +300,15 @@ MCP tools wrap these endpoints for the assistant:
 
 | Decision | Choice |
 |---|---|
-|  |  |
-|  |  |
-|  |  |
+| Scope | Phase 1 MVP only — Publish, Discover, Retrieve, Version (FR-01–04); auth, de-duplication, Phase 2 out of scope |
+| Access layer | MCP server — assistant-mediated only, no direct human UI |
+| Skill format | Directory (`SKILL.md` + supporting files), zipped as one archive per version |
+| Version metadata | Separate `.catalog-meta.json` (author, version, created_at, checksum) — `SKILL.md` stays a pure manifest |
+| Versioning model | Immutable, append-only — never overwrite; latest by default, any version retrievable by number |
+| Integrity | SHA-256 checksum verified on every `fetch_skill` before delivery |
+| Catalog Service | Single-process lightweight HTTP server |
+| Catalog Store | SQLite (metadata + FTS5 search) + filesystem (ZIP blobs) |
+| Durability | Weekly full snapshots — AWS S3 in production, local directory for the PoC |
+| Snapshot scheduling | OS-level cron, decoupled from the Catalog Service process |
+| Caching/sharding | None — throughput is trivial at 200-developer scale |
+| High availability | Deferred — out of scope for MVP, to revisit after Phase 1 ships |
