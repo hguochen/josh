@@ -5,9 +5,6 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.HexFormat;
 import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
@@ -31,7 +28,7 @@ public class SkillPackager {
         Path skillMd = skillDir.resolve("SKILL.md");
         SkillManifest manifest = manifestParser.parse(skillMd);
         byte[] archiveBytes = zip(skillDir);
-        String checksum = sha256Hex(archiveBytes);
+        String checksum = Checksums.sha256Hex(archiveBytes);
         return new PackagedSkill(manifest, archiveBytes, checksum);
     }
 
@@ -52,14 +49,5 @@ public class SkillPackager {
             throw new UncheckedIOException("Failed to zip skill directory " + skillDir, e);
         }
         return buffer.toByteArray();
-    }
-
-    private String sha256Hex(byte[] data) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            return HexFormat.of().formatHex(digest.digest(data));
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-256 is not available on this JVM", e);
-        }
     }
 }

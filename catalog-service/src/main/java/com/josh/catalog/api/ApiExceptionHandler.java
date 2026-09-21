@@ -1,0 +1,21 @@
+package com.josh.catalog.api;
+
+import com.josh.catalog.skill.InvalidSkillException;
+import java.util.Map;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+
+/**
+ * FR-01 exception: "Skill is missing a name, description, or body: it's rejected
+ * with an explanation; nothing partial is stored." This is the "explanation" part.
+ */
+@RestControllerAdvice
+public class ApiExceptionHandler {
+
+    @ExceptionHandler(InvalidSkillException.class)
+    public ResponseEntity<Map<String, String>> handleInvalidSkill(InvalidSkillException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", e.getMessage()));
+    }
+}

@@ -1,0 +1,98 @@
+package com.josh.catalog.api;
+
+import static org.hamcrest.Matchers.containsString;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import com.josh.catalog.skill.SkillPackager;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.Path;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.web.servlet.MockMvc;
+
+/**
+ * Step 3 checkpoint: exercise the real HTTP endpoint (POST /v1/skills,
+ * design_specifications.md Section 8 API Design) end to end, not just the
+ * service layer directly.
+ */
+@SpringBootTest
+@AutoConfigureMockMvc
+class SkillControllerTest {
+
+    @TempDir
+    static Path storageRoot;
+
+    @DynamicPropertySource
+    static void catalogStorageRoot(DynamicPropertyRegistry registry) {
+        registry.add("catalog.storage.root", () -> storageRoot.toString());
+    }
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @Autowired
+    private SkillPackager packager;
+
+    private byte[] sampleArchiveBytes() throws Exception {
+        Path skillDir = Path.of(getClass().getClassLoader()
+            .getResource("sample-skills/release-note-draft")
+            .toURI());
+        return packager.packageDirectory(skillDir).archiveBytes();
+    }
+
+    @Test
+    void publishReturns201WithNameVersionAndChecksum() throws Exception {
+        MockMultipartFile archive = new MockMultipartFile(
+            "archive", "release-note-draft.zip", "application/zip", sampleArchiveBytes());
+
+        mockMvc.perform(multipart("/v1/skills").file(archive).param("author", "Gary Hou"))
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.name").value("release-note-draft"))
+            .andExpect(jsonPath("$.version").isNumber())
+            .andExpect(jsonPath("$.checksum").isString());
+    }
+
+    @Test
+    void publishWithoutSkillMdReturns400WithExplanation() throws Exception {
+        MockMultipartFile archive = new MockMultipartFile(
+            "archive", "bad.zip", "application/zip", zipWithoutSkillMd());
+
+        mockMvc.perform(multipart("/v1/skills").file(archive).param("author", "Gary Hou"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.error").value(containsString("SKILL.md")));
+    }
+
+    @Test
+    void publishWithoutAuthorReturns400WithExplanation() throws Exception {
+        MockMultipartFile archive = new MockMultipartFile(
+            "archive", "release-note-draft.zip", "application/zip", sampleArchiveBytes());
+
+        mockMvc.perform(multipart("/v1/skills").file(archive).param("author", ""))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.error").value(containsString("author")));
+    }
+
+    private byte[] zipWithoutSkillMd() {
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        try (ZipOutputStream zip = new ZipOutputStream(buffer)) {
+            zip.putNextEntry(new ZipEntry("README.md"));
+            zip.write("not a skill".getBytes());
+            zip.closeEntry();
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+        return buffer.toByteArray();
+    }
+}
