@@ -24,7 +24,7 @@ _A central hub of skills catalog_
 
 - **Define Scale:** Bound by team size (~200 devs), not DAU/MAU traffic modeling.
 - **Derive math:** Skip capacity-planning math — not needed at this scale.
-- **Design system:** Concentrate design effort on the real complexity for this exercise — the data model (skill/manifest/version), the versioning behavior (FR-04), the API surface (FR-01–03), and how an AI assistant reaches the catalog (the PRD's core open dependency, PRD §10) — since that's where the actual decisions live, not in scale math.
+- **Design system:** Concentrate design effort on the real complexity for this exercise — the data model (skill/manifest/version), the versioning behavior (FR-04), the API surface (FR-01–03), and how an AI assistant reaches the catalog (the PRD's core open dependency, PRD 10) — since that's where the actual decisions live, not in scale math.
 
 ---
 
@@ -38,17 +38,17 @@ _A central hub of skills catalog_
 - Reject malformed publishes (missing name/description/body) cleanly, no partial writes
 
 **Out of scope:**
-- Authentication / access control (PRD §8, D3)
-- De-duplication of similar/near-identical skills (PRD §8, D3)
-- Phase 2 additions (undefined, deferred to builder's judgment — PRD §11)
+- Authentication / access control (PRD 8, D3)
+- De-duplication of similar/near-identical skills (PRD 8, D3)
+- Phase 2 additions (undefined, deferred to builder's judgment — PRD 11)
 - A direct human-operated UI as the access path (assistant-mediated only, per Assumptions)
 - Multi-machine/networked deployment across real separate developer machines (single-machine PoC, per Assumptions)
 - Concurrent-write conflict resolution / locking (per Assumptions)
 
 **NFRs:**
-- Latency: fast enough to feel interactive within an assistant conversation — no numeric target (PRD §7)
+- Latency: fast enough to feel interactive within an assistant conversation — no numeric target (PRD 7)
 - Availability: not a stated concern — single-machine PoC, no HA requirement
-- Consistency: a retrieved skill must be complete and unchanged from what was published — no silent loss or alteration (PRD §7)
+- Consistency: a retrieved skill must be complete and unchanged from what was published — no silent loss or alteration (PRD 7)
 
 **System type:** Versioned artifact/metadata store with natural-language search, exposed to AI assistants as callable tools (not a distributed system)
 
@@ -89,7 +89,7 @@ _A central hub of skills catalog_
 
 ## 6. Retention
 
-- All versions of every skill are retained indefinitely — no pruning/expiration. Deleting a version would violate the "no silent loss" consistency requirement (PRD §7) and defeats the purpose of version history (FR-04).
+- All versions of every skill are retained indefinitely — no pruning/expiration. Deleting a version would violate the "no silent loss" consistency requirement (PRD 7) and defeats the purpose of version history (FR-04).
 - No hot/warm/cold tiering — data volume is trivial at this scale (~67 publishes/day × ~15 KB ≈ ~1 MB/day, ~365 MB/year), so there's no cost or performance reason to move older versions to cheaper storage.
 - Storage: unbounded (grows with skill/version count), but growth rate is negligible at 200-developer scale — even a decade of history stays well under a few GB.
 - Durability over recency: publishes are rare but each is valuable (a lost skill affects the whole team), so the retention priority is "never lose a version," not "keep only recent data hot/accessible."
@@ -133,7 +133,7 @@ release-note-draft/v1/   # as persisted by the Catalog Service (not developer-au
 ```
 
 **Major components:**
-- **AI Assistant (client)** — not part of this system; calls MCP tools on the developer's behalf (PRD §10 dependency)
+- **AI Assistant (client)** — not part of this system; calls MCP tools on the developer's behalf (PRD 10 dependency)
 - **MCP Adapter** — runs beside each developer's assistant; exposes `search_skills` / `fetch_skill` / `skill_history` / `publish_skill` as MCP tools, translating them into HTTP calls against the Catalog Service. This is the swappable "access layer" the PRD leaves to the builder.
 - **Catalog Service (HTTP API)** — core logic: validates publishes, assigns version + checksum, enforces immutability (append-only, never overwrite), matches discovery queries, resolves version lookups. Stores/serves each Skill Version as a ZIP archive.
 - **Catalog Store (DB)** — persists Skill Version records (metadata) and archive blobs as an immutable, append-only log; SQL vs NoSQL choice in Section 8
@@ -187,7 +187,7 @@ High-Level Component Diagram
 
 ### Hardest component: MCP Adapter (assistant-to-catalog access layer)
 
-**Problem:** The PRD leaves "how the assistant reaches the catalog" entirely to the builder (PRD §10) — this is the system's core open dependency. A bespoke integration per assistant vendor doesn't scale, and a plain CLI requires the assistant to correctly construct shell invocations from natural language rather than making structured, typed calls.
+**Problem:** The PRD leaves "how the assistant reaches the catalog" entirely to the builder (PRD 10) — this is the system's core open dependency. A bespoke integration per assistant vendor doesn't scale, and a plain CLI requires the assistant to correctly construct shell invocations from natural language rather than making structured, typed calls.
 
 **Options:**
 
