@@ -2,6 +2,7 @@ skills_catalog_prd.pdf
 
 # Maven
 target/
+dependency-reduced-pom.xml
 
 # Catalog Store runtime data (SQLite DB + archive blobs) — generated, not source
 data/
