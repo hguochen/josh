@@ -3,6 +3,9 @@ skills_catalog_prd.pdf
 # Maven
 target/
 
+# Catalog Store runtime data (SQLite DB + archive blobs) — generated, not source
+data/
+
 # IDE
 .idea/
 *.iml
