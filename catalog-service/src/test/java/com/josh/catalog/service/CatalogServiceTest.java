@@ -182,6 +182,29 @@ class CatalogServiceTest {
             .hasMessageContaining("9999");
     }
 
+    @Test
+    void historyReturnsAllVersionsOldestFirstWithAuthorAndTimestamp() throws Exception {
+        byte[] archiveBytes = sampleArchiveBytes();
+        catalogService.publish(archiveBytes, "Gary Hou");
+        catalogService.publish(archiveBytes, "Gary Hou");
+
+        List<VersionSummary> history = catalogService.history("release-note-draft");
+
+        assertThat(history.size()).isGreaterThanOrEqualTo(2);
+        assertThat(history).isSortedAccordingTo(java.util.Comparator.comparingInt(VersionSummary::version));
+        assertThat(history).allSatisfy(v -> {
+            assertThat(v.author()).isNotBlank();
+            assertThat(v.createdAt()).isNotBlank();
+        });
+    }
+
+    @Test
+    void historyOfUnknownNameThrowsNotFound() {
+        assertThatThrownBy(() -> catalogService.history("no-such-skill-history-xyz"))
+            .isInstanceOf(SkillNotFoundException.class)
+            .hasMessageContaining("no-such-skill-history-xyz");
+    }
+
     private byte[] zipWithoutSkillMd() {
         ByteArrayOutputStream buffer = new ByteArrayOutputStream();
         try (ZipOutputStream zip = new ZipOutputStream(buffer)) {

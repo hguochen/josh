@@ -154,6 +154,30 @@ class SkillControllerTest {
             .andExpect(jsonPath("$.error").value(containsString("99999")));
     }
 
+    @Test
+    void historyListsPublishedVersionsWithVersionCreatedAtAndAuthor() throws Exception {
+        MockMultipartFile archive1 = new MockMultipartFile(
+            "archive", "release-note-draft.zip", "application/zip", sampleArchiveBytes());
+        mockMvc.perform(multipart("/v1/skills").file(archive1).param("author", "Gary Hou"));
+        MockMultipartFile archive2 = new MockMultipartFile(
+            "archive", "release-note-draft.zip", "application/zip", sampleArchiveBytes());
+        mockMvc.perform(multipart("/v1/skills").file(archive2).param("author", "Gary Hou"));
+
+        mockMvc.perform(get("/v1/skills/release-note-draft/versions"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$").isArray())
+            .andExpect(jsonPath("$[0].version").isNumber())
+            .andExpect(jsonPath("$[0].created_at").isString())
+            .andExpect(jsonPath("$[0].author").value("Gary Hou"));
+    }
+
+    @Test
+    void historyOfUnknownSkillReturns404WithExplanation() throws Exception {
+        mockMvc.perform(get("/v1/skills/no-such-skill-xyz/versions"))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.error").value(containsString("no-such-skill-xyz")));
+    }
+
     private String extractJsonStringField(String json, String field) {
         Matcher matcher = Pattern.compile("\"" + field + "\"\\s*:\\s*\"([^\"]+)\"").matcher(json);
         if (!matcher.find()) {

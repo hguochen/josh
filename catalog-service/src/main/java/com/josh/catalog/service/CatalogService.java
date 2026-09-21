@@ -20,7 +20,7 @@ import org.springframework.stereotype.Service;
  * assigns version + checksum, enforces immutability (append-only, never
  * overwrite), matches discovery queries, resolves version lookups. One class,
  * grown incrementally — Step 3 added publish (FR-01), Step 4 discover (FR-02),
- * Step 5 retrieve (FR-03); version history follows in Step 6.
+ * Step 5 retrieve (FR-03), Step 6 version history (FR-04).
  */
 @Service
 public class CatalogService {
@@ -104,6 +104,21 @@ public class CatalogService {
         byte[] archiveBytes = readArchive(skillVersion.archivePath());
 
         return new RetrieveResult(skillVersion.name(), skillVersion.version(), skillVersion.checksum(), archiveBytes);
+    }
+
+    /**
+     * FR-04: full version history for a name, oldest first, per Section 7's
+     * skill_history(name) flow. An unknown name is a 404, same as retrieve —
+     * "show me the history of a skill" implies the skill should exist.
+     */
+    public List<VersionSummary> history(String name) {
+        List<SkillVersion> versions = repository.findAllVersions(name);
+        if (versions.isEmpty()) {
+            throw new SkillNotFoundException("No skill named '" + name + "'");
+        }
+        return versions.stream()
+            .map(sv -> new VersionSummary(sv.version(), sv.createdAt(), sv.author()))
+            .toList();
     }
 
     private String notFoundMessage(String name, Integer version) {

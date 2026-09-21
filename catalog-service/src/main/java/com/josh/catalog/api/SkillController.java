@@ -4,6 +4,7 @@ import com.josh.catalog.service.CatalogService;
 import com.josh.catalog.service.DiscoverResult;
 import com.josh.catalog.service.PublishResult;
 import com.josh.catalog.service.RetrieveResult;
+import com.josh.catalog.service.VersionSummary;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.List;
@@ -66,5 +67,10 @@ public class SkillController {
                 .build()
                 .toString())
             .body(result.archiveBytes());
+    }
+
+    @GetMapping("/{name}/versions")
+    public List<VersionSummary> history(@PathVariable String name) {
+        return catalogService.history(name);
     }
 }
