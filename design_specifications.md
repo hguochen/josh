@@ -320,6 +320,7 @@ MCP tools wrap these endpoints for the assistant:
 | Decision | Choice |
 |---|---|
 | Scope | Phase 1 MVP only — Publish, Discover, Retrieve, Version (FR-01–04); auth, de-duplication, Phase 2 out of scope |
+| Language | Java — compile-time type safety for correctness guarantees, shared JVM toolchain (Spring Boot + MCP Java SDK) across all components |
 | Access layer | MCP server — assistant-mediated only, no direct human UI |
 | Skill format | Directory (`SKILL.md` + supporting files), zipped as one archive per version |
 | Version metadata | Separate `.catalog-meta.json` (author, version, created_at, checksum) — `SKILL.md` stays a pure manifest |
