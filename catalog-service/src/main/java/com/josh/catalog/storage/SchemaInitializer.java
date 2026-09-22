@@ -39,7 +39,8 @@ public class SchemaInitializer implements ApplicationRunner {
             name,
             description,
             content='skill_versions',
-            content_rowid='id'
+            content_rowid='id',
+            tokenize='porter unicode61'
         )
         """,
         """

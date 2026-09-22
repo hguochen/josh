@@ -117,4 +117,25 @@ class CatalogStoreIntegrationTest {
         assertThat(currentMatch.get(0).name()).isEqualTo("changelog-writer-v2");
         assertThat(currentMatch.get(0).version()).isEqualTo(2);
     }
+
+    @Test
+    void naturalLanguageQueryAndStemmingBothMatch() {
+        // Regression: "is there a skill for writing bug reports?" returned zero
+        // results even though a matching skill existed, because search used to
+        // require the ENTIRE query as one exact contiguous phrase. Real words
+        // here (not made-up tokens) since this specifically exercises the FTS5
+        // porter stemmer.
+        // Deliberately avoids "handling"/"handles" as a query word — it stems to
+        // the same root as "Handles" in another test's shared-context data above,
+        // which would give this test a false pass for the wrong reason.
+        repository.insert(sampleVersion("incident-escalator", 1, "Manages incident escalation for the on-call rotation"));
+
+        List<SkillVersion> fullQuestion = repository.searchLatestVersions(
+            "is there a skill for incident escalation?");
+        assertThat(fullQuestion).extracting(SkillVersion::name).containsExactly("incident-escalator");
+
+        // "escalations" (plural) never appears verbatim — only "escalation" does.
+        List<SkillVersion> pluralStemsToSingular = repository.searchLatestVersions("escalations");
+        assertThat(pluralStemsToSingular).extracting(SkillVersion::name).containsExactly("incident-escalator");
+    }
 }
