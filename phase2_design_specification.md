@@ -73,3 +73,5 @@ Small, high-value corrections found during Phase 1 implementation and testing.
   - Open question — version lineage on promote: does the full personal history (e.g. v1–v3) become visible in shared, or does shared start fresh at v1?
   - Open question — ownership after promotion: does the promoting developer become the owner (gating who can publish future shared versions), or does it stay open like today?
 
+![Personal skill collections feature diagram](assets/personal-skill-collections-diagram.webp)
+
