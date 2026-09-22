@@ -8,7 +8,6 @@ _Improvements to JOSH identified after Phase 1 (MVP) shipped to `main`, organize
 
 Small, high-value corrections found during Phase 1 implementation and testing.
 
-- **Discover results are not ranked by relevance.** `searchLatestVersions` has no `ORDER BY` — SQLite returns matches in arbitrary order. FTS5's `bm25()` ranking function can order best-match-first with minimal code change.
 - **Concurrent publish of a new skill name fails ungracefully.** The `UNIQUE(name, version)` constraint protects data integrity, but a simultaneous double-publish under the same new name currently surfaces as a raw SQL exception (500), not a clean "already published, please retry" response.
 - **No upload size limit is enforced.** Assumption 18 (`phase1_design_specifications.md`) states skills are small, text-based artifacts, but nothing in the stack actually enforces that — a large upload would be silently accepted.
   - **Fixed:** capped uploads at 5MB, rejected with a clean 400 instead of a silent accept or a raw 500. [dea5c67](https://github.com/hguochen/josh/commit/dea5c67)
@@ -43,5 +42,4 @@ Small, high-value corrections found during Phase 1 implementation and testing.
 
 - **Standalone publish CLI.** The original design mentions a CLI as an alternative to the MCP tool, but it was never built — publishing today requires either raw `curl` or an AI assistant session, leaving CI/scripting use cases unserved.
 - **Snapshot restore tooling/runbook.** Backup (via `VACUUM INTO`) is implemented and tested; restore has never been exercised or documented. A backup that has never been restored from is not proven disaster recovery.
-- **MCP tool naming still collides with Claude Code's own Skills feature** in some phrasings, despite disambiguating description text. Needs further real-world testing, and possibly a more distinctive tool/server naming scheme.
 - **De-duplication** was explicitly deferred by the PRD (8, D3). Only take this up if there's a deliberate decision to bring it into scope — not a default inclusion.
