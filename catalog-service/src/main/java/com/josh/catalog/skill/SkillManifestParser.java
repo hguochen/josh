@@ -12,7 +12,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * Parses SKILL.md's YAML front matter (name, description) and Markdown body
- * (instructions) — see design_specifications.md Section 7, Skill package format.
+ * (instructions) — see phase1_design_specifications.md Section 7, Skill package format.
  *
  * The front matter here is a flat key: value list, so a small hand-rolled parser
  * is used instead of a full YAML library — SKILL.md never needs nested structures.

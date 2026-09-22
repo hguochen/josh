@@ -16,7 +16,7 @@ import java.util.List;
 import org.springframework.stereotype.Service;
 
 /**
- * design_specifications.md Section 7/8's "Catalog Service": validates publishes,
+ * phase1_design_specifications.md Section 7/8's "Catalog Service": validates publishes,
  * assigns version + checksum, enforces immutability (append-only, never
  * overwrite), matches discovery queries, resolves version lookups. One class,
  * grown incrementally — Step 3 added publish (FR-01), Step 4 discover (FR-02),

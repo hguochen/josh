@@ -14,7 +14,7 @@
   <packaging>jar</packaging>
 
   <name>snapshot-job</name>
-  <description>Standalone weekly snapshot script, invoked by OS cron (see design_specifications.md Section 6/8)</description>
+  <description>Standalone weekly snapshot script, invoked by OS cron (see phase1_design_specifications.md Section 6/8)</description>
 
   <dependencies>
     <dependency>

@@ -14,7 +14,7 @@ import java.security.SecureRandom;
 import java.time.Duration;
 
 /**
- * Thin HTTP client for the Catalog Service (design_specifications.md Section 8,
+ * Thin HTTP client for the Catalog Service (phase1_design_specifications.md Section 8,
  * API Design). Translates MCP tool calls into HTTP calls — no business logic
  * lives here, that stays server-side.
  */

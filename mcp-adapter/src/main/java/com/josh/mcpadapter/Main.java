@@ -10,7 +10,7 @@ import java.nio.file.Paths;
 import java.util.concurrent.CountDownLatch;
 
 /**
- * MCP server over stdio (design_specifications.md Section 8's MCP Adapter
+ * MCP server over stdio (phase1_design_specifications.md Section 8's MCP Adapter
  * implementation details) — launched as a subprocess by the developer's
  * assistant, translates search_skills/fetch_skill/skill_history/publish_skill
  * tool calls into HTTP calls against the Catalog Service.

@@ -15,7 +15,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.stream.Stream;
 
 /**
- * design_specifications.md Section 6 (Retention: durability design) and Section 8
+ * phase1_design_specifications.md Section 6 (Retention: durability design) and Section 8
  * (Snapshot Job): a full, timestamped copy of the Catalog Store — decoupled from
  * catalog-service so a snapshot never depends on that process being up, and
  * durability-only (never a read/query path for discover/retrieve).

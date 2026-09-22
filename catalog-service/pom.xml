@@ -14,7 +14,7 @@
   <packaging>jar</packaging>
 
   <name>catalog-service</name>
-  <description>HTTP API: publish, discover, retrieve, version (FR-01..04) — see design_specifications.md Section 8</description>
+  <description>HTTP API: publish, discover, retrieve, version (FR-01..04) — see phase1_design_specifications.md Section 8</description>
 
   <dependencies>
     <dependency>

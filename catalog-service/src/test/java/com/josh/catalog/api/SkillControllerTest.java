@@ -28,7 +28,7 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
 /**
- * Exercises the real HTTP endpoints (design_specifications.md Section 8 API
+ * Exercises the real HTTP endpoints (phase1_design_specifications.md Section 8 API
  * Design) end to end, not just the service layer directly. Step 3: POST
  * /v1/skills. Step 4: GET /v1/skills?q=...
  */

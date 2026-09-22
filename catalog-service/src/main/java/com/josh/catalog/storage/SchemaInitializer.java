@@ -8,7 +8,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 /**
- * Creates the Catalog Store schema (design_specifications.md Section 5 fields +
+ * Creates the Catalog Store schema (phase1_design_specifications.md Section 5 fields +
  * Section 8 SQL vs NoSQL Decision) on startup. All statements are idempotent
  * (IF NOT EXISTS) so this is safe to run every boot.
  *

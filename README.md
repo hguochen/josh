@@ -3,7 +3,7 @@
 A shared catalog that lets developers publish reusable AI-assistant "skills" and
 lets other developers discover and retrieve them through their own AI assistant
 — no file handoffs, no copy-pasting. This is a proof-of-concept implementation
-of the design in [`design_specifications.md`](design_specifications.md), which
+of the design in [`phase1_design_specifications.md`](phase1_design_specifications.md), which
 covers the full rationale for every choice below.
 
 ## How it fits together
@@ -304,7 +304,7 @@ Section 6 of the design doc for that swap point.)
 
 - Full rationale for every decision (why SQLite, why append-only, why no
   auth, the FR-by-FR flow diagrams, etc.) is in
-  [`design_specifications.md`](design_specifications.md).
+  [`phase1_design_specifications.md`](phase1_design_specifications.md).
 - Diagrams' editable sources are in [`diagrams/`](diagrams) (Excalidraw
   format); rendered images are in [`assets/`](assets).
 - What's explicitly out of scope for this PoC: authentication, skill

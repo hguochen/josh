@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
-/** design_specifications.md Section 8, API Design. */
+/** phase1_design_specifications.md Section 8, API Design. */
 @RestController
 @RequestMapping("/v1/skills")
 public class SkillController {

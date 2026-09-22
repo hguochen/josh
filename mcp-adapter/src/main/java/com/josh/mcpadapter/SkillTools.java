@@ -15,7 +15,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * The four MCP tools (design_specifications.md Section 8, API Design): each is a
+ * The four MCP tools (phase1_design_specifications.md Section 8, API Design): each is a
  * thin wrapper translating a tool call into a CatalogClient HTTP call and mapping
  * the response into a CallToolResult. No business logic lives here.
  */

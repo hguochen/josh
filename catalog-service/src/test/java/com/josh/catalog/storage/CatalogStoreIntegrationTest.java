@@ -15,7 +15,7 @@ import org.springframework.test.context.DynamicPropertySource;
 
 /**
  * Step 1 checkpoint: insert/query rows directly against the real Catalog Store
- * (SQLite + FTS5) and confirm the schema matches design_specifications.md Section 5.
+ * (SQLite + FTS5) and confirm the schema matches phase1_design_specifications.md Section 5.
  *
  * Uses a fresh @TempDir per test run so the UNIQUE(name, version) constraint
  * (append-only, Section 6) can never collide with leftovers from a previous run.

@@ -4,7 +4,7 @@ import java.nio.file.Path;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
- * Root directory for the Catalog Store PoC (design_specifications.md Section 8:
+ * Root directory for the Catalog Store PoC (phase1_design_specifications.md Section 8:
  * embedded SQLite metadata + filesystem archive blobs, both under one root).
  */
 @ConfigurationProperties(prefix = "catalog.storage")

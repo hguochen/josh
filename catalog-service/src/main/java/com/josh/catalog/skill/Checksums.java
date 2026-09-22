@@ -4,7 +4,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 
-/** SHA-256 hex digests (design_specifications.md Section 5's `checksum` field). */
+/** SHA-256 hex digests (phase1_design_specifications.md Section 5's `checksum` field). */
 public final class Checksums {
 
     private Checksums() {}
