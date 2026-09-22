@@ -11,6 +11,7 @@ Small, high-value corrections found during Phase 1 implementation and testing.
 - **Discover results are not ranked by relevance.** `searchLatestVersions` has no `ORDER BY` — SQLite returns matches in arbitrary order. FTS5's `bm25()` ranking function can order best-match-first with minimal code change.
 - **Concurrent publish of a new skill name fails ungracefully.** The `UNIQUE(name, version)` constraint protects data integrity, but a simultaneous double-publish under the same new name currently surfaces as a raw SQL exception (500), not a clean "already published, please retry" response.
 - **No upload size limit is enforced.** Assumption 18 (`phase1_design_specifications.md`) states skills are small, text-based artifacts, but nothing in the stack actually enforces that — a large upload would be silently accepted.
+  - **Fixed:** capped uploads at 5MB, rejected with a clean 400 instead of a silent accept or a raw 500. [dea5c67](https://github.com/hguochen/josh/commit/dea5c67)
 
 ---
 
