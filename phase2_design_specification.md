@@ -26,17 +26,25 @@ Small, high-value corrections found during Phase 1 implementation and testing.
 - **No pagination on `discover` / version-history endpoints.** Fine today; will break down as individual skills accumulate many versions or the catalog grows well past current assumptions.
   - Add `limit`/`cursor` query params with a sane default and a hard max, instead of always returning the full result set.
   - Cursor-based (keyset), not offset — offset pagination skips/duplicates rows as new versions get published concurrently.
-  - Needs an explicit, deterministic `ORDER BY` — pagination isn't meaningful without one.
   - Version-history can cursor on `version` itself — already monotonic per skill name.
-  - Response should carry a `next_cursor` (or similar) so callers know whether more pages exist.
+  - Response should carry a `next_cursor` (or similar) so callers know whether more pages exist. Similar to HATEOAS implementation for REST services.
 
 ---
 
 ## 3. Security
 
 - **Authentication was explicitly out of scope for Phase 1** (trusted small group, PRD 8/D3). Needs a deliberate decision for Phase 2 — stay open, or add access control — rather than remaining unaddressed by default.
+  - Simplest option: per-developer API key/token, issued out of band, checked by a filter/interceptor in catalog-service.
+  - If an existing corporate IdP is available, prefer OAuth2/OIDC over rolling a custom scheme.
+  - Make it toggleable via config so local/PoC use can still run without setup.
 - **Archive extraction/packaging has not been audited for path-traversal risk** (e.g. zip-slip during unpacking). Worth a dedicated review given the code currently trusts archive contents.
+  - Reject any zip entry whose name contains `..` or is an absolute path, before extracting.
+  - After resolving the target path, verify it's still inside the intended directory (resolve + startsWith check) before writing.
+  - Add a test archive with a `../../etc/passwd`-style entry to prove it's rejected — same rigor as the other Immediate Fixes.
 - **No rate limiting or abuse protection** beyond the informal usage assumptions in Section 1 of the Phase 1 design (10 discovers/day, 5 retrieves/day, 1 publish/3 days per developer) — those are capacity assumptions, not enforced limits.
+  - Enforce those same numbers with a simple per-developer rate limiter (e.g. bucket4j), keyed by author/token.
+  - Return 429 with a clear message when exceeded, matching the existing clean-error pattern.
+  - Enforce centrally in catalog-service, not per-client — it's the one choke point every caller (MCP adapter, curl, future CLI) goes through.
 
 ---
 
