@@ -43,7 +43,7 @@ final class SkillTools {
                 )),
                 "required", List.of("query")
             ))
-            .description("Search the skills catalog by natural-language query. Returns each match's name, description, and latest version.")
+            .description("Search the team's shared skills catalog (a separate system from Claude Code's own built-in Skills feature) for reusable AI-assistant instructions other developers have published. Use this whenever the user asks if a skill exists for some task, e.g. 'is there a skill for X?' Returns each match's name, description, and latest version.")
             .build();
 
         return SyncToolSpecification.builder()
@@ -81,7 +81,7 @@ final class SkillTools {
                 ),
                 "required", List.of("name")
             ))
-            .description("Download a named skill's exact archive, verified byte-identical to what was published, and return its local path and manifest.")
+            .description("Download a named skill from the team's shared skills catalog (not Claude Code's own built-in Skills feature) — the exact archive, verified byte-identical to what was published, plus its local path and manifest. Use this when the user asks to get/fetch/use a specific published skill by name.")
             .build();
 
         return SyncToolSpecification.builder()
@@ -125,7 +125,7 @@ final class SkillTools {
                 "properties", Map.of("name", Map.of("type", "string", "description", "The skill's name")),
                 "required", List.of("name")
             ))
-            .description("List all retained versions of a named skill, oldest first, with author and publish time.")
+            .description("List all retained versions of a named skill in the team's shared skills catalog (not Claude Code's own built-in Skills feature), oldest first, with author and publish time.")
             .build();
 
         return SyncToolSpecification.builder()
@@ -159,7 +159,7 @@ final class SkillTools {
                 "properties", Map.of("path", Map.of("type", "string", "description", "Local filesystem path to the skill directory")),
                 "required", List.of("path")
             ))
-            .description("Publish a local skill directory (containing SKILL.md) to the catalog. Optional convenience tool; a CLI can also publish directly against the HTTP API.")
+            .description("Publish a local skill directory (containing SKILL.md) to the team's shared skills catalog (not Claude Code's own built-in Skills feature), so other developers can discover and reuse it. Optional convenience tool; a CLI can also publish directly against the HTTP API.")
             .build();
 
         return SyncToolSpecification.builder()
