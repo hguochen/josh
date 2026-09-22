@@ -34,7 +34,8 @@ public class SkillController {
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<PublishResult> publish(
         @RequestParam("archive") MultipartFile archive,
-        @RequestParam("author") String author
+        @RequestParam("author") String author,
+        @RequestParam(required = false) String visibility
     ) {
         byte[] archiveBytes;
         try {
@@ -43,21 +44,25 @@ public class SkillController {
             throw new UncheckedIOException("Failed to read uploaded archive", e);
         }
 
-        PublishResult result = catalogService.publish(archiveBytes, author);
+        PublishResult result = catalogService.publish(archiveBytes, author, visibility);
         return ResponseEntity.status(HttpStatus.CREATED).body(result);
     }
 
     @GetMapping
-    public List<DiscoverResult> discover(@RequestParam(name = "q", defaultValue = "") String query) {
-        return catalogService.discover(query);
+    public List<DiscoverResult> discover(
+        @RequestParam(name = "q", defaultValue = "") String query,
+        @RequestParam(required = false) String author
+    ) {
+        return catalogService.discover(query, author);
     }
 
     @GetMapping("/{name}")
     public ResponseEntity<byte[]> retrieve(
         @PathVariable String name,
-        @RequestParam(required = false) Integer version
+        @RequestParam(required = false) Integer version,
+        @RequestParam(required = false) String author
     ) {
-        RetrieveResult result = catalogService.retrieve(name, version);
+        RetrieveResult result = catalogService.retrieve(name, version, author);
 
         return ResponseEntity.ok()
             .contentType(MediaType.valueOf("application/zip"))
@@ -70,7 +75,20 @@ public class SkillController {
     }
 
     @GetMapping("/{name}/versions")
-    public List<VersionSummary> history(@PathVariable String name) {
-        return catalogService.history(name);
+    public List<VersionSummary> history(
+        @PathVariable String name,
+        @RequestParam(required = false) String author
+    ) {
+        return catalogService.history(name, author);
+    }
+
+    /** phase2_design_specification.md Features: promote a personal skill into the shared catalog. */
+    @PostMapping("/{name}/promote")
+    public ResponseEntity<PublishResult> promote(
+        @PathVariable String name,
+        @RequestParam String author
+    ) {
+        PublishResult result = catalogService.promote(name, author);
+        return ResponseEntity.status(HttpStatus.CREATED).body(result);
     }
 }

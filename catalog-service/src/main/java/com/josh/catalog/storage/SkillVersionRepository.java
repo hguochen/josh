@@ -34,6 +34,8 @@ public class SkillVersionRepository {
         "need", "want", "show", "tell", "how", "what", "skill", "skills"
     );
 
+    private static final String SHARED_SCOPE = "shared";
+
     private static final RowMapper<SkillVersion> ROW_MAPPER = (rs, rowNum) -> new SkillVersion(
         rs.getLong("id"),
         rs.getString("name"),
@@ -42,7 +44,8 @@ public class SkillVersionRepository {
         rs.getString("author"),
         rs.getString("created_at"),
         rs.getString("checksum"),
-        rs.getString("archive_path")
+        rs.getString("archive_path"),
+        rs.getString("scope")
     );
 
     private final JdbcTemplate jdbcTemplate;
@@ -54,8 +57,8 @@ public class SkillVersionRepository {
     public void insert(SkillVersion skillVersion) {
         jdbcTemplate.update(
             """
-            INSERT INTO skill_versions (name, version, description, author, created_at, checksum, archive_path)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO skill_versions (name, version, description, author, created_at, checksum, archive_path, scope)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             skillVersion.name(),
             skillVersion.version(),
@@ -63,33 +66,52 @@ public class SkillVersionRepository {
             skillVersion.author(),
             skillVersion.createdAt(),
             skillVersion.checksum(),
-            skillVersion.archivePath()
+            skillVersion.archivePath(),
+            skillVersion.scope()
         );
     }
 
+    /** Shared-scope convenience overload — kept for existing (pre-personal-collections) callers. */
     public Optional<SkillVersion> findLatestVersion(String name) {
+        return findLatestVersion(SHARED_SCOPE, name);
+    }
+
+    public Optional<SkillVersion> findLatestVersion(String scope, String name) {
         List<SkillVersion> rows = jdbcTemplate.query(
-            "SELECT * FROM skill_versions WHERE name = ? ORDER BY version DESC LIMIT 1",
+            "SELECT * FROM skill_versions WHERE scope = ? AND name = ? ORDER BY version DESC LIMIT 1",
             ROW_MAPPER,
+            scope,
             name
         );
         return rows.stream().findFirst();
     }
 
+    /** Shared-scope convenience overload — kept for existing (pre-personal-collections) callers. */
     public Optional<SkillVersion> findVersion(String name, int version) {
+        return findVersion(SHARED_SCOPE, name, version);
+    }
+
+    public Optional<SkillVersion> findVersion(String scope, String name, int version) {
         List<SkillVersion> rows = jdbcTemplate.query(
-            "SELECT * FROM skill_versions WHERE name = ? AND version = ?",
+            "SELECT * FROM skill_versions WHERE scope = ? AND name = ? AND version = ?",
             ROW_MAPPER,
+            scope,
             name,
             version
         );
         return rows.stream().findFirst();
     }
 
+    /** Shared-scope convenience overload — kept for existing (pre-personal-collections) callers. */
     public List<SkillVersion> findAllVersions(String name) {
+        return findAllVersions(SHARED_SCOPE, name);
+    }
+
+    public List<SkillVersion> findAllVersions(String scope, String name) {
         return jdbcTemplate.query(
-            "SELECT * FROM skill_versions WHERE name = ? ORDER BY version ASC",
+            "SELECT * FROM skill_versions WHERE scope = ? AND name = ? ORDER BY version ASC",
             ROW_MAPPER,
+            scope,
             name
         );
     }
@@ -110,18 +132,35 @@ public class SkillVersionRepository {
      * FR-02 Discover: match only rows that are BOTH an FTS hit AND the latest
      * version for their name — never surface a stale older version whose text
      * happened to match (Section 7 diagram: "read latest versions; match
-     * name/description").
+     * name/description"). Shared-scope only — kept for existing (pre-personal-
+     * collections) callers.
      */
     public List<SkillVersion> searchLatestVersions(String query) {
+        return searchLatestVersions(query, null);
+    }
+
+    /**
+     * Same as above, plus (when {@code callerAuthor} is given) that caller's own
+     * personal-scope skills — never another developer's personal skills
+     * (phase2_design_specification.md, Features). "Latest" is computed per
+     * (scope, name), so a personal and a shared skill of the same name never
+     * interfere with each other's version count.
+     */
+    public List<SkillVersion> searchLatestVersions(String query, String callerAuthor) {
         String ftsQuery = toFts5Query(query);
+        String secondScope = (callerAuthor == null || callerAuthor.isBlank()) ? SHARED_SCOPE : callerAuthor;
         return jdbcTemplate.query(
             """
             SELECT sv.* FROM skill_versions sv
             WHERE sv.id IN (SELECT rowid FROM skill_search WHERE skill_search MATCH ?)
-              AND sv.version = (SELECT MAX(v2.version) FROM skill_versions v2 WHERE v2.name = sv.name)
+              AND sv.scope IN (?, ?)
+              AND sv.version = (SELECT MAX(v2.version) FROM skill_versions v2
+                                 WHERE v2.name = sv.name AND v2.scope = sv.scope)
             """,
             ROW_MAPPER,
-            ftsQuery
+            ftsQuery,
+            SHARED_SCOPE,
+            secondScope
         );
     }
 

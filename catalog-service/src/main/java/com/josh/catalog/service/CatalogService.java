@@ -14,6 +14,7 @@ import java.nio.file.Path;
 import java.sql.SQLException;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.jdbc.UncategorizedSQLException;
 import org.springframework.stereotype.Service;
 
@@ -35,6 +36,9 @@ public class CatalogService {
      */
     private static final int SQLITE_CONSTRAINT_ERROR_CODE = 19;
 
+    private static final String SHARED_SCOPE = "shared";
+    private static final String PRIVATE_VISIBILITY = "private";
+
     private final SkillArchiveReader archiveReader;
     private final SkillVersionRepository repository;
     private final CatalogStorageProperties storageProperties;
@@ -53,58 +57,133 @@ public class CatalogService {
      * FR-01: validate, assign version (increment if name exists, else v1), then
      * write the archive to the filesystem and the metadata row to SQL. Validation
      * happens before either write, so a rejection never leaves anything partial
-     * stored (PRD's FR-01 exception: "nothing partial is stored").
+     * stored (PRD's FR-01 exception: "nothing partial is stored"). Defaults to
+     * the shared catalog — unchanged Phase 1 behavior for existing callers.
      */
     public PublishResult publish(byte[] archiveBytes, String author) {
+        return publish(archiveBytes, author, null);
+    }
+
+    /**
+     * phase2_design_specification.md Features: {@code visibility = "private"}
+     * publishes into the caller's own personal collection (scope = author)
+     * instead of the shared catalog. Any other value (including null/blank)
+     * stays shared — the default is deliberately unchanged so existing callers
+     * (README walkthrough, sample-skill scripts, publish_skill) keep working
+     * without passing this new parameter.
+     */
+    public PublishResult publish(byte[] archiveBytes, String author, String visibility) {
         if (author == null || author.isBlank()) {
             throw new InvalidSkillException("author is required");
         }
 
+        String scope = PRIVATE_VISIBILITY.equalsIgnoreCase(visibility) ? author : SHARED_SCOPE;
+
         SkillManifest manifest = archiveReader.readManifest(archiveBytes);
 
-        int version = repository.findLatestVersion(manifest.name())
+        int version = repository.findLatestVersion(scope, manifest.name())
             .map(latest -> latest.version() + 1)
             .orElse(1);
 
         String checksum = Checksums.sha256Hex(archiveBytes);
-        String relativeArchivePath = manifest.name() + "/" + version + ".zip";
+        String relativeArchivePath = scope + "/" + manifest.name() + "/" + version + ".zip";
 
         writeArchive(relativeArchivePath, archiveBytes);
 
-        try {
-            repository.insert(new SkillVersion(
-                null,
-                manifest.name(),
-                version,
-                manifest.description(),
-                author,
-                Instant.now().toString(),
-                checksum,
-                relativeArchivePath
-            ));
-        } catch (UncategorizedSQLException e) {
-            if (!isUniqueConstraintViolation(e)) {
-                throw e;
-            }
-            throw new ConcurrentPublishException(
-                "'" + manifest.name() + "' version " + version + " was just published by someone else — please retry",
-                e
-            );
-        }
+        insertOrThrowConflict(new SkillVersion(
+            null,
+            manifest.name(),
+            version,
+            manifest.description(),
+            author,
+            Instant.now().toString(),
+            checksum,
+            relativeArchivePath,
+            scope
+        ), manifest.name(), version);
 
         return new PublishResult(manifest.name(), version, checksum);
     }
 
     /**
+     * phase2_design_specification.md Features: promotes the caller's own latest
+     * personal version of {@code name} into the shared catalog, as a fresh
+     * shared version 1 — not the caller's whole personal history (sidesteps the
+     * "does history become public" question) — and only the caller's own
+     * personal copy (never someone else's) since {@code author} scopes the
+     * lookup. Rejected outright if the name already exists in shared: no
+     * silent overwrite, no auto-rename. Ownership after promotion stays open,
+     * same as any other shared skill today — no new access control.
+     */
+    public PublishResult promote(String name, String author) {
+        if (author == null || author.isBlank()) {
+            throw new InvalidSkillException("author is required");
+        }
+
+        SkillVersion personal = repository.findLatestVersion(author, name)
+            .orElseThrow(() -> new SkillNotFoundException(
+                "No personal skill named '" + name + "' for '" + author + "'"));
+
+        if (repository.findLatestVersion(SHARED_SCOPE, name).isPresent()) {
+            throw new PromoteConflictException(
+                "'" + name + "' already exists in the shared catalog — promote rejected");
+        }
+
+        byte[] archiveBytes = readArchive(personal.archivePath());
+        int version = 1;
+        String relativeArchivePath = SHARED_SCOPE + "/" + name + "/" + version + ".zip";
+
+        writeArchive(relativeArchivePath, archiveBytes);
+
+        insertOrThrowConflict(new SkillVersion(
+            null,
+            name,
+            version,
+            personal.description(),
+            author,
+            Instant.now().toString(),
+            personal.checksum(),
+            relativeArchivePath,
+            SHARED_SCOPE
+        ), name, version);
+
+        return new PublishResult(name, version, personal.checksum());
+    }
+
+    private void insertOrThrowConflict(SkillVersion skillVersion, String name, int version) {
+        try {
+            repository.insert(skillVersion);
+        } catch (UncategorizedSQLException e) {
+            if (!isUniqueConstraintViolation(e)) {
+                throw e;
+            }
+            throw new ConcurrentPublishException(
+                "'" + name + "' version " + version + " was just published by someone else — please retry",
+                e
+            );
+        }
+    }
+
+    /**
      * FR-02: natural-language search against latest versions only (never a stale
      * older version's text). A blank query always yields no results rather than
-     * hitting FTS5 with an invalid empty MATCH expression.
+     * hitting FTS5 with an invalid empty MATCH expression. Shared catalog only —
+     * unchanged Phase 1 behavior for existing callers.
      */
     public List<DiscoverResult> discover(String query) {
+        return discover(query, null);
+    }
+
+    /**
+     * Same as above, plus (when {@code author} is given) that caller's own
+     * personal skills — never another developer's (phase2_design_specification.md,
+     * Features).
+     */
+    public List<DiscoverResult> discover(String query, String author) {
         if (query == null || query.isBlank()) {
             return List.of();
         }
-        return repository.searchLatestVersions(query).stream()
+        return repository.searchLatestVersions(query, author).stream()
             .map(sv -> new DiscoverResult(sv.name(), sv.description(), sv.version()))
             .toList();
     }
@@ -113,12 +192,26 @@ public class CatalogService {
      * FR-03: fetch the exact, unaltered archive for a name — latest version if
      * `version` is absent, otherwise that specific version. Reading the bytes back
      * from disk (rather than trusting anything cached) means what's returned is
-     * genuinely what's on the filesystem right now.
+     * genuinely what's on the filesystem right now. Shared catalog only —
+     * unchanged Phase 1 behavior for existing callers.
      */
     public RetrieveResult retrieve(String name, Integer version) {
-        SkillVersion skillVersion = (version == null
-                ? repository.findLatestVersion(name)
-                : repository.findVersion(name, version))
+        return retrieve(name, version, null);
+    }
+
+    /**
+     * Checks the shared catalog first; only if not found there — and only when
+     * {@code author} is given — falls back to that caller's own personal copy.
+     * Never resolves another developer's personal skill. A private skill someone
+     * else owns and a nonexistent name look identical here (404), on purpose —
+     * retrieve shouldn't leak that a private skill exists
+     * (phase2_design_specification.md, Features).
+     */
+    public RetrieveResult retrieve(String name, Integer version, String author) {
+        SkillVersion skillVersion = resolveVersion(SHARED_SCOPE, name, version)
+            .or(() -> (author == null || author.isBlank())
+                ? Optional.empty()
+                : resolveVersion(author, name, version))
             .orElseThrow(() -> new SkillNotFoundException(notFoundMessage(name, version)));
 
         byte[] archiveBytes = readArchive(skillVersion.archivePath());
@@ -126,13 +219,28 @@ public class CatalogService {
         return new RetrieveResult(skillVersion.name(), skillVersion.version(), skillVersion.checksum(), archiveBytes);
     }
 
+    private Optional<SkillVersion> resolveVersion(String scope, String name, Integer version) {
+        return version == null
+            ? repository.findLatestVersion(scope, name)
+            : repository.findVersion(scope, name, version);
+    }
+
     /**
      * FR-04: full version history for a name, oldest first, per Section 7's
      * skill_history(name) flow. An unknown name is a 404, same as retrieve —
-     * "show me the history of a skill" implies the skill should exist.
+     * "show me the history of a skill" implies the skill should exist. Shared
+     * catalog only — unchanged Phase 1 behavior for existing callers.
      */
     public List<VersionSummary> history(String name) {
-        List<SkillVersion> versions = repository.findAllVersions(name);
+        return history(name, null);
+    }
+
+    /** Same shared-first-then-own-personal resolution as {@link #retrieve}. */
+    public List<VersionSummary> history(String name, String author) {
+        List<SkillVersion> versions = repository.findAllVersions(SHARED_SCOPE, name);
+        if (versions.isEmpty() && author != null && !author.isBlank()) {
+            versions = repository.findAllVersions(author, name);
+        }
         if (versions.isEmpty()) {
             throw new SkillNotFoundException("No skill named '" + name + "'");
         }

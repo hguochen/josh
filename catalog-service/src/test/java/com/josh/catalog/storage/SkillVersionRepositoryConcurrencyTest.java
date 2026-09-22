@@ -61,7 +61,7 @@ class SkillVersionRepositoryConcurrencyTest {
                 try {
                     repository.insert(new SkillVersion(
                         null, name, 1, "desc", "author-" + attempt,
-                        Instant.now().toString(), "checksum-" + attempt, name + "/1.zip"
+                        Instant.now().toString(), "checksum-" + attempt, name + "/1.zip", "shared"
                     ));
                     return null;
                 } catch (Exception e) {

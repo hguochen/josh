@@ -30,7 +30,8 @@ public class SchemaInitializer implements ApplicationRunner {
             created_at TEXT NOT NULL,
             checksum TEXT NOT NULL,
             archive_path TEXT NOT NULL,
-            UNIQUE(name, version)
+            scope TEXT NOT NULL DEFAULT 'shared',
+            UNIQUE(scope, name, version)
         )
         """,
         "CREATE INDEX IF NOT EXISTS idx_skill_versions_name ON skill_versions(name)",

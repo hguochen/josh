@@ -1,6 +1,7 @@
 package com.josh.catalog.api;
 
 import com.josh.catalog.service.ConcurrentPublishException;
+import com.josh.catalog.service.PromoteConflictException;
 import com.josh.catalog.service.SkillNotFoundException;
 import com.josh.catalog.skill.InvalidSkillException;
 import java.util.Map;
@@ -34,6 +35,11 @@ public class ApiExceptionHandler {
 
     @ExceptionHandler(ConcurrentPublishException.class)
     public ResponseEntity<Map<String, String>> handleConcurrentPublish(ConcurrentPublishException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", e.getMessage()));
+    }
+
+    @ExceptionHandler(PromoteConflictException.class)
+    public ResponseEntity<Map<String, String>> handlePromoteConflict(PromoteConflictException e) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", e.getMessage()));
     }
 

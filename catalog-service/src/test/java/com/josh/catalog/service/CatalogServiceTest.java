@@ -205,6 +205,97 @@ class CatalogServiceTest {
             .hasMessageContaining("no-such-skill-history-xyz");
     }
 
+    // -- phase2_design_specification.md Features: personal skill collections --
+
+    @Test
+    void privatePublishIsFoundOnlyByItsOwnAuthorsDiscover() throws Exception {
+        catalogService.publish(archiveFor("alices-private-skill", "Only Alice can see this"), "alice", "private");
+
+        assertThat(catalogService.discover("alices-private-skill", null))
+            .noneMatch(r -> r.name().equals("alices-private-skill"));
+        assertThat(catalogService.discover("alices-private-skill", "bob"))
+            .noneMatch(r -> r.name().equals("alices-private-skill"));
+        assertThat(catalogService.discover("alices-private-skill", "alice"))
+            .anyMatch(r -> r.name().equals("alices-private-skill"));
+    }
+
+    @Test
+    void retrieveResolvesOwnPrivateSkillButNeverSomeoneElses() throws Exception {
+        catalogService.publish(archiveFor("alices-retrievable-skill", "desc"), "alice", "private");
+
+        assertThat(catalogService.retrieve("alices-retrievable-skill", null, "alice").archiveBytes()).isNotEmpty();
+
+        assertThatThrownBy(() -> catalogService.retrieve("alices-retrievable-skill", null, "bob"))
+            .isInstanceOf(SkillNotFoundException.class);
+        assertThatThrownBy(() -> catalogService.retrieve("alices-retrievable-skill", null, null))
+            .isInstanceOf(SkillNotFoundException.class);
+    }
+
+    @Test
+    void historyResolvesOwnPrivateSkillButNeverSomeoneElses() throws Exception {
+        catalogService.publish(archiveFor("alices-history-skill", "desc"), "alice", "private");
+
+        assertThat(catalogService.history("alices-history-skill", "alice")).hasSize(1);
+
+        assertThatThrownBy(() -> catalogService.history("alices-history-skill", "bob"))
+            .isInstanceOf(SkillNotFoundException.class);
+        assertThatThrownBy(() -> catalogService.history("alices-history-skill", null))
+            .isInstanceOf(SkillNotFoundException.class);
+    }
+
+    @Test
+    void promoteMovesLatestPersonalVersionIntoSharedAsFreshVersionOne() throws Exception {
+        catalogService.publish(archiveFor("promotable-skill", "v1 text"), "alice", "private");
+        catalogService.publish(archiveFor("promotable-skill", "v2 text"), "alice", "private"); // now v2 personally
+
+        PublishResult promoted = catalogService.promote("promotable-skill", "alice");
+
+        assertThat(promoted.name()).isEqualTo("promotable-skill");
+        assertThat(promoted.version()).isEqualTo(1); // fresh in shared, not carrying over personal v2
+
+        // Now visible to everyone via the shared-catalog path, no author needed.
+        RetrieveResult shared = catalogService.retrieve("promotable-skill", null);
+        assertThat(shared.checksum()).isEqualTo(promoted.checksum());
+        assertThat(catalogService.discover("promotable-skill", null))
+            .anyMatch(r -> r.name().equals("promotable-skill"));
+
+        // Alice's personal copy still exists too — promote copies, doesn't move.
+        assertThat(catalogService.retrieve("promotable-skill", null, "alice")).isNotNull();
+    }
+
+    @Test
+    void promoteRejectsWhenNameAlreadyExistsInShared() throws Exception {
+        catalogService.publish(archiveFor("already-shared-skill", "the shared one"), "carol"); // shared, default
+        catalogService.publish(archiveFor("already-shared-skill", "bob's private one"), "bob", "private");
+
+        assertThatThrownBy(() -> catalogService.promote("already-shared-skill", "bob"))
+            .isInstanceOf(PromoteConflictException.class)
+            .hasMessageContaining("already-shared-skill");
+    }
+
+    @Test
+    void promoteOfNameWithNoPersonalSkillThrowsNotFound() {
+        assertThatThrownBy(() -> catalogService.promote("never-published-by-anyone", "dave"))
+            .isInstanceOf(SkillNotFoundException.class)
+            .hasMessageContaining("dave");
+    }
+
+    private byte[] archiveFor(String name, String description) throws IOException {
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        try (ZipOutputStream zip = new ZipOutputStream(buffer)) {
+            zip.putNextEntry(new ZipEntry("SKILL.md"));
+            zip.write(("""
+                ---
+                name: %s
+                description: %s
+                ---
+                Do the thing.
+                """.formatted(name, description)).getBytes());
+            zip.closeEntry();
+        }
+        return buffer.toByteArray();
+    }
+
     private byte[] zipWithoutSkillMd() {
         ByteArrayOutputStream buffer = new ByteArrayOutputStream();
         try (ZipOutputStream zip = new ZipOutputStream(buffer)) {

@@ -40,7 +40,7 @@ class CatalogServiceConcurrentPublishTest {
         when(archiveReader.readManifest(any())).thenReturn(
             new SkillManifest("racy-skill", "a skill two publishers race to create", "body")
         );
-        when(repository.findLatestVersion("racy-skill")).thenReturn(Optional.empty());
+        when(repository.findLatestVersion("shared", "racy-skill")).thenReturn(Optional.empty());
 
         SQLException uniqueConstraintFailure = new SQLException(
             "A UNIQUE constraint failed (UNIQUE constraint failed: skill_versions.name, skill_versions.version)",
@@ -68,7 +68,7 @@ class CatalogServiceConcurrentPublishTest {
         when(archiveReader.readManifest(any())).thenReturn(
             new SkillManifest("other-skill", "unrelated failure", "body")
         );
-        when(repository.findLatestVersion("other-skill")).thenReturn(Optional.empty());
+        when(repository.findLatestVersion("shared", "other-skill")).thenReturn(Optional.empty());
 
         SQLException unrelatedFailure = new SQLException("disk I/O error", null, 10);
         UncategorizedSQLException unrelatedException =

@@ -3,6 +3,7 @@ package com.josh.catalog.api;
 import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -176,6 +177,85 @@ class SkillControllerTest {
         mockMvc.perform(get("/v1/skills/no-such-skill-xyz/versions"))
             .andExpect(status().isNotFound())
             .andExpect(jsonPath("$.error").value(containsString("no-such-skill-xyz")));
+    }
+
+    // -- phase2_design_specification.md Features: personal skill collections --
+
+    @Test
+    void privatePublishIsInvisibleToDiscoverAndRetrieveWithoutMatchingAuthor() throws Exception {
+        MockMultipartFile archive = new MockMultipartFile(
+            "archive", "skill.zip", "application/zip", archiveFor("http-private-skill", "private via HTTP"));
+
+        mockMvc.perform(multipart("/v1/skills").file(archive).param("author", "alice").param("visibility", "private"))
+            .andExpect(status().isCreated());
+
+        mockMvc.perform(get("/v1/skills").param("q", "http-private-skill"))
+            .andExpect(jsonPath("$[?(@.name == 'http-private-skill')]").doesNotExist());
+        mockMvc.perform(get("/v1/skills").param("q", "http-private-skill").param("author", "bob"))
+            .andExpect(jsonPath("$[?(@.name == 'http-private-skill')]").doesNotExist());
+        mockMvc.perform(get("/v1/skills").param("q", "http-private-skill").param("author", "alice"))
+            .andExpect(jsonPath("$[?(@.name == 'http-private-skill')]").exists());
+
+        mockMvc.perform(get("/v1/skills/http-private-skill"))
+            .andExpect(status().isNotFound());
+        mockMvc.perform(get("/v1/skills/http-private-skill").param("author", "alice"))
+            .andExpect(status().isOk());
+    }
+
+    @Test
+    void promoteMovesPersonalSkillIntoSharedCatalog() throws Exception {
+        MockMultipartFile archive = new MockMultipartFile(
+            "archive", "skill.zip", "application/zip", archiveFor("http-promotable-skill", "promote me"));
+        mockMvc.perform(multipart("/v1/skills").file(archive).param("author", "alice").param("visibility", "private"))
+            .andExpect(status().isCreated());
+
+        mockMvc.perform(post("/v1/skills/http-promotable-skill/promote").param("author", "alice"))
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.name").value("http-promotable-skill"))
+            .andExpect(jsonPath("$.version").value(1));
+
+        mockMvc.perform(get("/v1/skills/http-promotable-skill"))
+            .andExpect(status().isOk());
+    }
+
+    @Test
+    void promoteWithoutAnExistingPersonalSkillReturns404() throws Exception {
+        mockMvc.perform(post("/v1/skills/http-never-published/promote").param("author", "dave"))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.error").value(containsString("dave")));
+    }
+
+    @Test
+    void promoteConflictingWithAnExistingSharedSkillReturns409() throws Exception {
+        MockMultipartFile sharedArchive = new MockMultipartFile(
+            "archive", "skill.zip", "application/zip", archiveFor("http-conflicting-skill", "already shared"));
+        mockMvc.perform(multipart("/v1/skills").file(sharedArchive).param("author", "carol"))
+            .andExpect(status().isCreated());
+
+        MockMultipartFile privateArchive = new MockMultipartFile(
+            "archive", "skill.zip", "application/zip", archiveFor("http-conflicting-skill", "bob's private version"));
+        mockMvc.perform(multipart("/v1/skills").file(privateArchive).param("author", "bob").param("visibility", "private"))
+            .andExpect(status().isCreated());
+
+        mockMvc.perform(post("/v1/skills/http-conflicting-skill/promote").param("author", "bob"))
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.error").value(containsString("http-conflicting-skill")));
+    }
+
+    private byte[] archiveFor(String name, String description) throws IOException {
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        try (ZipOutputStream zip = new ZipOutputStream(buffer)) {
+            zip.putNextEntry(new ZipEntry("SKILL.md"));
+            zip.write(("""
+                ---
+                name: %s
+                description: %s
+                ---
+                Do the thing.
+                """.formatted(name, description)).getBytes());
+            zip.closeEntry();
+        }
+        return buffer.toByteArray();
     }
 
     private String extractJsonStringField(String json, String field) {

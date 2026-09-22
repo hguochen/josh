@@ -35,6 +35,10 @@ class CatalogStoreIntegrationTest {
     private SkillVersionRepository repository;
 
     private SkillVersion sampleVersion(String name, int version, String description) {
+        return sampleVersion(name, version, description, "shared");
+    }
+
+    private SkillVersion sampleVersion(String name, int version, String description, String scope) {
         return new SkillVersion(
             null,
             name,
@@ -43,7 +47,8 @@ class CatalogStoreIntegrationTest {
             "Gary Hou",
             Instant.parse("2026-09-21T00:00:00Z").toString(),
             "checksum-" + name + "-v" + version,
-            name + "/" + version + ".zip"
+            name + "/" + version + ".zip",
+            scope
         );
     }
 
@@ -137,5 +142,29 @@ class CatalogStoreIntegrationTest {
         // "escalations" (plural) never appears verbatim — only "escalation" does.
         List<SkillVersion> pluralStemsToSingular = repository.searchLatestVersions("escalations");
         assertThat(pluralStemsToSingular).extracting(SkillVersion::name).containsExactly("incident-escalator");
+    }
+
+    @Test
+    void sameNameInDifferentScopesDoesNotCollide() {
+        // phase2_design_specification.md Features: UNIQUE(scope, name, version)
+        // must let a shared skill and two different developers' personal skills
+        // share the identical name without interfering with each other.
+        repository.insert(sampleVersion("scope-isolation-skill", 1, "the shared copy", "shared"));
+        repository.insert(sampleVersion("scope-isolation-skill", 1, "alice's private copy", "alice"));
+        repository.insert(sampleVersion("scope-isolation-skill", 1, "bob's private copy", "bob"));
+
+        assertThat(repository.findLatestVersion("shared", "scope-isolation-skill"))
+            .get().extracting(SkillVersion::description).isEqualTo("the shared copy");
+        assertThat(repository.findLatestVersion("alice", "scope-isolation-skill"))
+            .get().extracting(SkillVersion::description).isEqualTo("alice's private copy");
+        assertThat(repository.findLatestVersion("bob", "scope-isolation-skill"))
+            .get().extracting(SkillVersion::description).isEqualTo("bob's private copy");
+
+        // Republishing under one scope only advances that scope's version count.
+        repository.insert(sampleVersion("scope-isolation-skill", 2, "alice's v2", "alice"));
+        assertThat(repository.findLatestVersion("alice", "scope-isolation-skill"))
+            .get().extracting(SkillVersion::version).isEqualTo(2);
+        assertThat(repository.findLatestVersion("shared", "scope-isolation-skill"))
+            .get().extracting(SkillVersion::version).isEqualTo(1);
     }
 }
