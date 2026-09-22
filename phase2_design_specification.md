@@ -53,7 +53,7 @@ Small, high-value corrections found during Phase 1 implementation and testing.
 - **Snapshot job can fail silently.** It runs via OS cron with no alerting — a failed run currently has no signal beyond a non-zero exit code nobody is watching.
   - Alert on failure — simplest: cron mails on non-zero exit, or wrap the job in a script that notifies Slack/email.
   - Write a "last successful snapshot" timestamp file; alert if it goes stale, so a job that silently stops running (not just one that fails) is also caught.
-  - Persist snapshot outcomes to a durable log file, not just stdout that cron usually discards.
+
 - **No health/metrics endpoint** on the catalog service for operational visibility.
   - Add Spring Boot Actuator (`/actuator/health`, `/actuator/metrics`) — minimal effort, built-in.
   - Health check should confirm the SQLite file is actually reachable/writable, not just "process is up."
@@ -63,6 +63,13 @@ Small, high-value corrections found during Phase 1 implementation and testing.
 
 ## 5. Features
 
-- **Standalone publish CLI.** The original design mentions a CLI as an alternative to the MCP tool, but it was never built — publishing today requires either raw `curl` or an AI assistant session, leaving CI/scripting use cases unserved.
-- **Snapshot restore tooling/runbook.** Backup (via `VACUUM INTO`) is implemented and tested; restore has never been exercised or documented. A backup that has never been restored from is not proven disaster recovery.
-- **De-duplication** was explicitly deferred by the PRD (8, D3). Only take this up if there's a deliberate decision to bring it into scope — not a default inclusion.
+- **Per-developer private skill collections, promotable to the shared catalog.** A two-tier catalog: publishing defaults to a private, developer-scoped space visible only to the publisher; an explicit "promote" action moves a skill into the existing shared catalog (today's MVP behavior, unchanged). Closer to a private fork than a local repo — skills stay server-hosted throughout, only visibility changes.
+  - Data model: add a `scope` column to `skill_versions`; widen `UNIQUE(name, version)` to `UNIQUE(scope, name, version)` — no new database, no schema fork. `scope` is `"shared"` for the main catalog, or the developer's identity for personal.
+  - `discover`/`retrieve` become identity-scoped: results are shared skills ∪ the caller's own personal skills, never another developer's personal skills. Retrieve of someone else's personal skill should 404, not 403 — don't leak that it exists.
+  - MCP Adapter needs to carry the caller's identity on every call so the Catalog Service can enforce the above.
+  - **Hard dependency: requires Authentication**, which is currently undecided in the Security section — there's no reliable caller identity today (`author` is an unverified free-text string).
+  - Personal skills stay append-only/immutable, same as shared — no delete/unshare (Section 6).
+  - Open question — promote conflict policy: what happens when the promoted name already exists in shared?
+  - Open question — version lineage on promote: does the full personal history (e.g. v1–v3) become visible in shared, or does shared start fresh at v1?
+  - Open question — ownership after promotion: does the promoting developer become the owner (gating who can publish future shared versions), or does it stay open like today?
+
