@@ -75,3 +75,7 @@ Small, high-value corrections found during Phase 1 implementation and testing.
   - **Implemented (MVP):** promote conflicts reject with 409; promote copies only the latest personal version, landing as a fresh shared v1 (not the full history); ownership after promotion stays open, same as any other shared skill today. Identity reuses the existing unverified `author` field — still not real authentication, that dependency is unchanged. [c8904d0](https://github.com/hguochen/josh/commit/c8904d0) (catalog-service) · [7580557](https://github.com/hguochen/josh/commit/7580557) (MCP Adapter)
 
 ![Personal skill collections feature diagram](assets/personal-skill-collections-diagram.webp)
+
+- **Tag-based grouping and retrieval.** Group skillsets by tags so different organizational stakeholders can retrieve at the tag level.
+  - Publishing gains optional, user-supplied tags.
+  - `discover` gains search by tag/category (e.g. `finance`, `engineering`).
