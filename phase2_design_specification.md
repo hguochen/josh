@@ -72,6 +72,6 @@ Small, high-value corrections found during Phase 1 implementation and testing.
   - Open question — promote conflict policy: what happens when the promoted name already exists in shared?
   - Open question — version lineage on promote: does the full personal history (e.g. v1–v3) become visible in shared, or does shared start fresh at v1?
   - Open question — ownership after promotion: does the promoting developer become the owner (gating who can publish future shared versions), or does it stay open like today?
+  - **Implemented (MVP):** promote conflicts reject with 409; promote copies only the latest personal version, landing as a fresh shared v1 (not the full history); ownership after promotion stays open, same as any other shared skill today. Identity reuses the existing unverified `author` field — still not real authentication, that dependency is unchanged. [c8904d0](https://github.com/hguochen/josh/commit/c8904d0) (catalog-service) · [7580557](https://github.com/hguochen/josh/commit/7580557) (MCP Adapter)
 
 ![Personal skill collections feature diagram](assets/personal-skill-collections-diagram.webp)
-
