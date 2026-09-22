@@ -35,12 +35,8 @@ Small, high-value corrections found during Phase 1 implementation and testing.
 
 - **Authentication was explicitly out of scope for Phase 1** (trusted small group, PRD 8/D3). Needs a deliberate decision for Phase 2 — stay open, or add access control — rather than remaining unaddressed by default.
   - Simplest option: per-developer API key/token, issued out of band, checked by a filter/interceptor in catalog-service.
-  - If an existing corporate IdP is available, prefer OAuth2/OIDC over rolling a custom scheme.
-  - Make it toggleable via config so local/PoC use can still run without setup.
-- **Archive extraction/packaging has not been audited for path-traversal risk** (e.g. zip-slip during unpacking). Worth a dedicated review given the code currently trusts archive contents.
-  - Reject any zip entry whose name contains `..` or is an absolute path, before extracting.
-  - After resolving the target path, verify it's still inside the intended directory (resolve + startsWith check) before writing.
-  - Add a test archive with a `../../etc/passwd`-style entry to prove it's rejected — same rigor as the other Immediate Fixes.
+  - If an existing corporate SSO is available, prefer OAuth2 over rolling a custom scheme.
+
 - **No rate limiting or abuse protection** beyond the informal usage assumptions in Section 1 of the Phase 1 design (10 discovers/day, 5 retrieves/day, 1 publish/3 days per developer) — those are capacity assumptions, not enforced limits.
   - Enforce those same numbers with a simple per-developer rate limiter (e.g. bucket4j), keyed by author/token.
   - Return 429 with a clear message when exceeded, matching the existing clean-error pattern.
@@ -51,8 +47,17 @@ Small, high-value corrections found during Phase 1 implementation and testing.
 ## 4. Observability
 
 - **No structured logging of publish/discover/retrieve events.** Makes debugging and usage analysis difficult beyond default Spring Boot request logs.
+  - Log each call as structured (JSON) output: skill name, version, author/caller, outcome, latency — not free-text.
+  - Add a correlation/request ID so one call's logs are traceable across catalog-service and the MCP adapter.
+  - SLF4J/Logback with a JSON encoder covers this — no new infra needed.
 - **Snapshot job can fail silently.** It runs via OS cron with no alerting — a failed run currently has no signal beyond a non-zero exit code nobody is watching.
+  - Alert on failure — simplest: cron mails on non-zero exit, or wrap the job in a script that notifies Slack/email.
+  - Write a "last successful snapshot" timestamp file; alert if it goes stale, so a job that silently stops running (not just one that fails) is also caught.
+  - Persist snapshot outcomes to a durable log file, not just stdout that cron usually discards.
 - **No health/metrics endpoint** on the catalog service for operational visibility.
+  - Add Spring Boot Actuator (`/actuator/health`, `/actuator/metrics`) — minimal effort, built-in.
+  - Health check should confirm the SQLite file is actually reachable/writable, not just "process is up."
+  - Expose basic counters (publishes/discovers/retrieves, skill count) — cheap way to validate against the Section 1 capacity assumptions.
 
 ---
 
