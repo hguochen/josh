@@ -11,8 +11,10 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.sql.SQLException;
 import java.time.Instant;
 import java.util.List;
+import org.springframework.jdbc.UncategorizedSQLException;
 import org.springframework.stereotype.Service;
 
 /**
@@ -24,6 +26,14 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class CatalogService {
+
+    /**
+     * Spring has no built-in error-code mapping for SQLite, so a constraint
+     * violation surfaces as UncategorizedSQLException rather than the usual
+     * DataIntegrityViolationException — checked via SQLite's own error code
+     * (19 = SQLITE_CONSTRAINT) rather than string-matching the message.
+     */
+    private static final int SQLITE_CONSTRAINT_ERROR_CODE = 19;
 
     private final SkillArchiveReader archiveReader;
     private final SkillVersionRepository repository;
@@ -61,16 +71,26 @@ public class CatalogService {
 
         writeArchive(relativeArchivePath, archiveBytes);
 
-        repository.insert(new SkillVersion(
-            null,
-            manifest.name(),
-            version,
-            manifest.description(),
-            author,
-            Instant.now().toString(),
-            checksum,
-            relativeArchivePath
-        ));
+        try {
+            repository.insert(new SkillVersion(
+                null,
+                manifest.name(),
+                version,
+                manifest.description(),
+                author,
+                Instant.now().toString(),
+                checksum,
+                relativeArchivePath
+            ));
+        } catch (UncategorizedSQLException e) {
+            if (!isUniqueConstraintViolation(e)) {
+                throw e;
+            }
+            throw new ConcurrentPublishException(
+                "'" + manifest.name() + "' version " + version + " was just published by someone else — please retry",
+                e
+            );
+        }
 
         return new PublishResult(manifest.name(), version, checksum);
     }
@@ -119,6 +139,11 @@ public class CatalogService {
         return versions.stream()
             .map(sv -> new VersionSummary(sv.version(), sv.createdAt(), sv.author()))
             .toList();
+    }
+
+    private boolean isUniqueConstraintViolation(UncategorizedSQLException e) {
+        SQLException sqlException = e.getSQLException();
+        return sqlException != null && sqlException.getErrorCode() == SQLITE_CONSTRAINT_ERROR_CODE;
     }
 
     private String notFoundMessage(String name, Integer version) {

@@ -1,5 +1,6 @@
 package com.josh.catalog.api;
 
+import com.josh.catalog.service.ConcurrentPublishException;
 import com.josh.catalog.service.SkillNotFoundException;
 import com.josh.catalog.skill.InvalidSkillException;
 import java.util.Map;
@@ -29,6 +30,11 @@ public class ApiExceptionHandler {
     @ExceptionHandler(SkillNotFoundException.class)
     public ResponseEntity<Map<String, String>> handleSkillNotFound(SkillNotFoundException e) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", e.getMessage()));
+    }
+
+    @ExceptionHandler(ConcurrentPublishException.class)
+    public ResponseEntity<Map<String, String>> handleConcurrentPublish(ConcurrentPublishException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", e.getMessage()));
     }
 
     @ExceptionHandler(MaxUploadSizeExceededException.class)
