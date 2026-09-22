@@ -9,6 +9,7 @@ _Improvements to JOSH identified after Phase 1 (MVP) shipped to `main`, organize
 Small, high-value corrections found during Phase 1 implementation and testing.
 
 - **Concurrent publish of a new skill name fails ungracefully.** The `UNIQUE(name, version)` constraint protects data integrity, but a simultaneous double-publish under the same new name currently surfaces as a raw SQL exception (500), not a clean "already published, please retry" response.
+  - **Fixed:** the losing publish now gets a clean 409 with a retry message instead of a raw 500, verified with two genuinely concurrent live requests. [60ae3bf](https://github.com/hguochen/josh/commit/60ae3bf)
 - **No upload size limit is enforced.** Assumption 18 (`phase1_design_specifications.md`) states skills are small, text-based artifacts, but nothing in the stack actually enforces that — a large upload would be silently accepted.
   - **Fixed:** capped uploads at 5MB, rejected with a clean 400 instead of a silent accept or a raw 500. [dea5c67](https://github.com/hguochen/josh/commit/dea5c67)
 
