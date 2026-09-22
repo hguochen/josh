@@ -83,6 +83,17 @@ curl -X POST http://localhost:8080/v1/skills \
 Expected: `{"name":"bug-report-template","version":1,"checksum":"..."}` — note
 the `checksum`, you'll use it below to prove retrieval integrity.
 
+Optional:
+```
+// add a api docs generator skill
+curl -X POST http://localhost:8080/v1/skills -F "archive=@sample-skills/api-docs-generator.zip" -F "author=YOUR_NAME"
+
+// add a bugs report template skill
+curl -X POST http://localhost:8080/v1/skills -F "archive=@sample-skills/bug-report-template.zip" -F "author=YOUR_NAME"
+
+```
+Sample skills are in `./sample-skills` folder to simulate users creating their local skills and packaging them in `.zip` format.
+
 **Reject a malformed skill (missing `SKILL.md`) — nothing should be stored:**
 ```bash
 mkdir -p /tmp/bad-skill && echo "not a skill" > /tmp/bad-skill/README.md
@@ -106,6 +117,9 @@ Expected: a JSON array containing `bug-report-template` with its description
 and latest version. (This is deliberately phrased as a full question, not
 just a keyword — natural-language phrasing is exactly what discover needs to
 handle.)
+```
+[{"name":"bug-report-template","description":"Draft a structured bug report from a description of unexpected behavior","latest_version":1}]
+```
 
 **Search for something that doesn't exist:**
 ```bash
@@ -127,6 +141,18 @@ curl -D - -o /tmp/skill.zip "http://localhost:8080/v1/skills/bug-report-template
 Expected: `200`, an `ETag` header carrying the checksum, and
 `Content-Disposition: attachment; filename="bug-report-template-v1.zip"`.
 
+```
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0HTTP/1.1 200
+Content-Disposition: attachment; filename="bug-report-template-v1.zip"
+ETag: "9d93068d9760f3d75ecd54511b8ab6b8d375a2a9bc94cbfd2f41192da612ba2b"
+Content-Type: application/zip
+Content-Length: 894
+
+100   894  100   894    0     0   106k      0 --:--:-- --:--:-- --:--:--  109k
+```
+
 **Verify it's actually byte-identical to what was published** — the real
 integrity check, not just a 200 status:
 ```bash
@@ -147,6 +173,22 @@ Expected: `404` with `{"error":"No skill named 'no-such-skill'"}`.
 
 *Publishing under an existing name creates a new version rather than
 overwriting; prior versions stay retrievable and the full history is visible.*
+**AI Assistant listing all skills in natural language query**
+```
+$ list me all the skills
+
+⏺ The Josh MCP catalog has exactly 2 skills:
+
+  ┌─────────────────────┬─────────┬────────────────────────────────────────────────────────────────────────────┐
+  │        Name         │ Version │                                Description                                 │
+  ├─────────────────────┼─────────┼────────────────────────────────────────────────────────────────────────────┤
+  │ bug-report-template │ v2      │ Draft a structured bug report from a description of unexpected behavior    │
+  ├─────────────────────┼─────────┼────────────────────────────────────────────────────────────────────────────┤
+  │ api-docs-generator  │ v2      │ Generate API reference documentation from function signatures and comments │
+  └─────────────────────┴─────────┴────────────────────────────────────────────────────────────────────────────┘
+
+  That's the full catalog. Want to fetch or use either of these?
+```
 
 **Publish a second version of the same skill:**
 ```bash
@@ -155,12 +197,18 @@ curl -X POST http://localhost:8080/v1/skills \
 ```
 Expected: `{"name":"bug-report-template","version":2,...}` — version
 incremented, not overwritten.
+```
+{"name":"bug-report-template","version":2,"checksum":"9d93068d9760f3d75ecd54511b8ab6b8d375a2a9bc94cbfd2f41192da612ba2b"}
+```
 
 **See the version history:**
 ```bash
 curl "http://localhost:8080/v1/skills/bug-report-template/versions"
 ```
 Expected: both v1 and v2 listed, oldest first, each with its own author and timestamp.
+```
+[{"version":1,"created_at":"2026-09-22T01:47:57.332021Z","author":"Gary"},{"version":2,"created_at":"2026-09-22T01:55:25.547828Z","author":"Someone Else"}]
+```
 
 **Retrieve the older version specifically (prove v1 was never touched):**
 ```bash
@@ -169,6 +217,17 @@ curl -D - -o /tmp/skill-v1.zip "http://localhost:8080/v1/skills/bug-report-templ
 Expected: `Content-Disposition` says `v1`, and its `ETag` matches the exact
 checksum from the very first FR-01 publish above — proving the v2 publish
 never altered v1.
+```
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0HTTP/1.1 200
+Content-Disposition: attachment; filename="bug-report-template-v1.zip"
+ETag: "9d93068d9760f3d75ecd54511b8ab6b8d375a2a9bc94cbfd2f41192da612ba2b"
+Content-Type: application/zip
+Content-Length: 894
+
+100   894  100   894    0     0   207k      0 --:--:-- --:--:-- --:--:--  218k
+```
 
 ## 2. Run the MCP Adapter
 
@@ -204,6 +263,9 @@ start) and ask something like *"is there a skill for writing bug reports?"*
 | `JOSH_CACHE_DIR` | `~/.josh/cache` | Where `fetch_skill` caches downloaded, checksum-verified archives |
 
 ## 3. Run the Snapshot Job
+
+For durability, we hookup a regular CRON job to perform weekly snapshots on all skills and persist them into a long term durable storage such as S3. 
+NOTE: This proof of concept implementation persist the snapshot file in a local storage instead. We can hookup AWS S3 to replace local data persistence through reconfiguring environment variable configurations below.
 
 Build the runnable jar:
 
