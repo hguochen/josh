@@ -49,37 +49,114 @@ curl http://localhost:8080/ping
 
 Expected: `{"status":"ok","service":"catalog-service"}`
 
-### Try the API directly
-
-Two sample skills are included under [`sample-skills/`](sample-skills), pre-zipped and ready to publish:
-
-```bash
-# Publish a skill
-curl -X POST http://localhost:8080/v1/skills \
-  -F "archive=@sample-skills/bug-report-template.zip" -F "author=Your Name"
-
-# Discover skills by natural-language query
-curl "http://localhost:8080/v1/skills?q=writing%20bug%20reports"
-
-# Retrieve the latest version's archive
-curl -o skill.zip "http://localhost:8080/v1/skills/bug-report-template"
-
-# Retrieve a specific version
-curl -o skill.zip "http://localhost:8080/v1/skills/bug-report-template?version=1"
-
-# See the full version history
-curl "http://localhost:8080/v1/skills/bug-report-template/versions"
-```
-
-Publishing under an existing name creates a new version rather than
-overwriting — nothing is ever deleted (see Section 6 of the design doc).
-
 ### Configuration
 
 | Env var | Default | Purpose |
 |---|---|---|
 | `catalog.storage.root` (Spring property) | `./data` | Where the SQLite DB and archives live |
 | `server.port` (Spring property) | `8080` | HTTP port |
+
+## Walkthrough: testing FR-01 – FR-04
+
+Each functional requirement below is self-contained — copy/paste the commands
+in order within a section to see it work, including the failure/edge cases
+called out in the PRD. All of these assume `catalog-service` is running
+(above) and are run from the repo root, so `sample-skills/bug-report-template.zip`
+resolves correctly.
+
+### FR-01 — Publish
+
+*A developer can publish a skill to the catalog; a malformed one is rejected
+with an explanation and nothing partial is stored.*
+
+**Publish a new skill:**
+```bash
+curl -X POST http://localhost:8080/v1/skills \
+  -F "archive=@sample-skills/bug-report-template.zip" -F "author=Your Name"
+```
+Expected: `{"name":"bug-report-template","version":1,"checksum":"..."}` — note
+the `checksum`, you'll use it below to prove retrieval integrity.
+
+**Reject a malformed skill (missing `SKILL.md`) — nothing should be stored:**
+```bash
+mkdir -p /tmp/bad-skill && echo "not a skill" > /tmp/bad-skill/README.md
+(cd /tmp/bad-skill && zip -q /tmp/bad-skill.zip README.md)
+curl -X POST http://localhost:8080/v1/skills -F "archive=@/tmp/bad-skill.zip" -F "author=Your Name"
+```
+Expected: `{"error":"Archive is missing SKILL.md at its root"}`
+
+### FR-02 — Discover
+
+*A developer can find published skills via a natural-language query; a query
+that matches nothing gets a clear "no results," not an error.*
+
+**Search for something that exists:**
+```bash
+curl -G "http://localhost:8080/v1/skills" --data-urlencode "q=is there a skill for writing bug reports?"
+```
+Expected: a JSON array containing `bug-report-template` with its description
+and latest version. (This is deliberately phrased as a full question, not
+just a keyword — natural-language phrasing is exactly what discover needs to
+handle.)
+
+**Search for something that doesn't exist:**
+```bash
+curl -G "http://localhost:8080/v1/skills" --data-urlencode "q=quantum flux capacitor"
+```
+Expected: `[]` — an empty array, not an error.
+
+### FR-03 — Retrieve
+
+*A developer can retrieve a named skill, complete and unchanged from what was
+published; retrieving one that doesn't exist gets a clear "not found."*
+
+**Retrieve the latest version:**
+```bash
+curl -D - -o /tmp/skill.zip "http://localhost:8080/v1/skills/bug-report-template"
+```
+Expected: `200`, an `ETag` header carrying the checksum, and
+`Content-Disposition: attachment; filename="bug-report-template-v1.zip"`.
+
+**Verify it's actually byte-identical to what was published** — the real
+integrity check, not just a 200 status:
+```bash
+shasum -a 256 /tmp/skill.zip
+```
+Compare this against the `checksum` from the FR-01 publish response above —
+it should match exactly.
+
+**Retrieve a skill that doesn't exist:**
+```bash
+curl -i "http://localhost:8080/v1/skills/no-such-skill"
+```
+Expected: `404` with `{"error":"No skill named 'no-such-skill'"}`.
+
+### FR-04 — Version
+
+*Publishing under an existing name creates a new version rather than
+overwriting; prior versions stay retrievable and the full history is visible.*
+
+**Publish a second version of the same skill:**
+```bash
+curl -X POST http://localhost:8080/v1/skills \
+  -F "archive=@sample-skills/bug-report-template.zip" -F "author=Someone Else"
+```
+Expected: `{"name":"bug-report-template","version":2,...}` — version
+incremented, not overwritten.
+
+**See the version history:**
+```bash
+curl "http://localhost:8080/v1/skills/bug-report-template/versions"
+```
+Expected: both v1 and v2 listed, oldest first, each with its own author and timestamp.
+
+**Retrieve the older version specifically (prove v1 was never touched):**
+```bash
+curl -D - -o /tmp/skill-v1.zip "http://localhost:8080/v1/skills/bug-report-template?version=1"
+```
+Expected: `Content-Disposition` says `v1`, and its `ETag` matches the exact
+checksum from the very first FR-01 publish above — proving the v2 publish
+never altered v1.
 
 ## 2. Run the MCP Adapter
 
@@ -99,7 +176,7 @@ claude mcp add josh -e CATALOG_SERVICE_URL=http://localhost:8080 \
 Start a **new** Claude Code session afterward (MCP servers load at session
 start) and ask something like *"is there a skill for writing bug reports?"*
 — if you're testing this and the catalog is empty, publish one of the
-`sample-skills/` first (see above).
+`sample-skills/` first (see the FR-01 walkthrough above).
 
 > **Note:** if your assistant has its own built-in "Skills" concept (Claude
 > Code does), a generic question can sometimes get answered from that instead
