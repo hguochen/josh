@@ -7,6 +7,9 @@ dependency-reduced-pom.xml
 # Catalog Store runtime data (SQLite DB + archive blobs) — generated, not source
 data/
 
+# Snapshot Job output — generated, not source
+snapshots/
+
 # IDE
 .idea/
 *.iml
