@@ -20,11 +20,15 @@ Small, high-value corrections found during Phase 1 implementation and testing.
 - **High availability was explicitly deferred for Phase 1.** Revisit now that the MVP has shipped — decide whether it's still out of scope or becomes a Phase 2 target.
   - Active-passive: 1 active node serving requests, 1 passive on standby, automatic failover.
   - Passive needs the same data — SQLite is a single file, so replicate it (e.g. WAL streaming) or use shared storage, not a local disk per node.
-  - Load balancer / virtual IP in front, routing only to the current active node.
-  - Health checks to detect the active node is down and trigger failover.
+  - virtual IP in front, routing only to the current active node.
+  - Interval health checks to detect the active node is down and trigger failover.
   - A lock/lease so only one node ever writes at a time — avoids split-brain, matches SQLite's single-writer model.
-- **Single-file SQLite store.** Adequate at current scale (~200 developers), but the growth ceiling and the trigger point for migrating to a different store should be documented rather than left implicit.
 - **No pagination on `discover` / version-history endpoints.** Fine today; will break down as individual skills accumulate many versions or the catalog grows well past current assumptions.
+  - Add `limit`/`cursor` query params with a sane default and a hard max, instead of always returning the full result set.
+  - Cursor-based (keyset), not offset — offset pagination skips/duplicates rows as new versions get published concurrently.
+  - Needs an explicit, deterministic `ORDER BY` — pagination isn't meaningful without one.
+  - Version-history can cursor on `version` itself — already monotonic per skill name.
+  - Response should carry a `next_cursor` (or similar) so callers know whether more pages exist.
 
 ---
 
