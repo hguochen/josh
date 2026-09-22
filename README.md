@@ -14,6 +14,10 @@ Developer → AI Assistant → MCP Adapter → Catalog Service (HTTP API) → Ca
                                           Snapshot Job (weekly, via cron)
 ```
 
+![High-level component diagram](assets/high-level-component-diagram.webp)
+
+(Editable source: [`diagrams/high-level-design.excalidraw`](diagrams/high-level-design.excalidraw))
+
 ## Modules
 
 - **`catalog-service`** — the HTTP API: publish, discover, retrieve, version history (FR-01–04)
@@ -66,6 +70,8 @@ resolves correctly.
 
 ### FR-01 — Publish
 
+![FR-01 Publish flow](assets/fr-01-publish-flow.webp)
+
 *A developer can publish a skill to the catalog; a malformed one is rejected
 with an explanation and nothing partial is stored.*
 
@@ -87,6 +93,8 @@ Expected: `{"error":"Archive is missing SKILL.md at its root"}`
 
 ### FR-02 — Discover
 
+![FR-02 Discover flow](assets/fr-02-discover-flow.webp)
+
 *A developer can find published skills via a natural-language query; a query
 that matches nothing gets a clear "no results," not an error.*
 
@@ -106,6 +114,8 @@ curl -G "http://localhost:8080/v1/skills" --data-urlencode "q=quantum flux capac
 Expected: `[]` — an empty array, not an error.
 
 ### FR-03 — Retrieve
+
+![FR-03 Retrieve flow](assets/fr-03-retrieve-flow.webp)
 
 *A developer can retrieve a named skill, complete and unchanged from what was
 published; retrieving one that doesn't exist gets a clear "not found."*
@@ -132,6 +142,8 @@ curl -i "http://localhost:8080/v1/skills/no-such-skill"
 Expected: `404` with `{"error":"No skill named 'no-such-skill'"}`.
 
 ### FR-04 — Version
+
+![FR-04 Version flow](assets/fr-04-version-flow.webp)
 
 *Publishing under an existing name creates a new version rather than
 overwriting; prior versions stay retrievable and the full history is visible.*
