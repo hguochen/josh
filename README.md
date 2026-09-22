@@ -21,7 +21,7 @@ Developer → AI Assistant → MCP Adapter → Catalog Service (HTTP API) → Ca
 ## Modules
 
 - **`catalog-service`** — the HTTP API: publish, discover, retrieve, version history (FR-01–04)
-- **`mcp-adapter`** — MCP server exposing `search_skills` / `fetch_skill` / `skill_history` / `publish_skill` to an AI assistant
+- **`mcp-adapter`** — MCP server exposing `search_skills` / `fetch_skill` / `skill_history` / `publish_skill` / `promote_skill` to an AI assistant
 - **`snapshot-job`** — standalone weekly durability backup, invoked by OS cron
 
 ## Requirements
@@ -228,6 +228,103 @@ Content-Length: 894
 
 100   894  100   894    0     0   207k      0 --:--:-- --:--:-- --:--:--  218k
 ```
+
+## Walkthrough: Personal Skill Collections (Phase 2)
+
+*A newer addition on top of FR-01–04 (see [`phase2_design_specification.md`](phase2_design_specification.md),
+Features): a developer can publish privately — visible only to them — and
+later explicitly promote a private skill into the shared catalog everyone
+else sees. Still assumes `catalog-service` is running (above).*
+
+> **Note:** identity here is just the `author` string you pass — the same
+> unverified free-text field FR-01 already uses, not real authentication.
+> This is deliberate for this MVP pass; see the Security section of
+> `phase2_design_specification.md`.
+
+**Publish privately (`visibility=private`):**
+```bash
+curl -X POST http://localhost:8080/v1/skills \
+  -F "archive=@sample-skills/commit-message-writer.zip" \
+  -F "author=alice" -F "visibility=private"
+```
+Expected:
+```
+{"name":"commit-message-writer","version":1,"checksum":"561fd09d49aad2bd257e5d95cbee906bb315dbb29b85b3a49c276015ff0572c8"}
+```
+
+**Confirm it's invisible to discover without alice's identity:**
+```bash
+curl -G "http://localhost:8080/v1/skills" --data-urlencode "q=commit message"
+curl -G "http://localhost:8080/v1/skills" --data-urlencode "q=commit message" --data-urlencode "author=bob"
+```
+Expected: `[]` for both — no author searches only the shared catalog, and
+bob's own scope doesn't include alice's private skill either.
+
+**Confirm alice can find her own private skill:**
+```bash
+curl -G "http://localhost:8080/v1/skills" --data-urlencode "q=commit message" --data-urlencode "author=alice"
+```
+Expected:
+```
+[{"name":"commit-message-writer","description":"Draft a conventional commit message from a summary of code changes","latest_version":1}]
+```
+
+**Retrieve without alice's identity gets a plain 404 — indistinguishable from
+a name that doesn't exist at all, on purpose (no leaking that a private skill
+exists):**
+```bash
+curl -i "http://localhost:8080/v1/skills/commit-message-writer"
+```
+Expected: `404` with `{"error":"No skill named 'commit-message-writer'"}`.
+
+**Retrieve as alice:**
+```bash
+curl -i "http://localhost:8080/v1/skills/commit-message-writer?author=alice"
+```
+Expected: `200`.
+
+**Promote it into the shared catalog:**
+```bash
+curl -X POST "http://localhost:8080/v1/skills/commit-message-writer/promote?author=alice"
+```
+Expected: a fresh shared version 1 (not alice's personal version number,
+which may already be higher if she'd republished privately):
+```
+{"name":"commit-message-writer","version":1,"checksum":"561fd09d49aad2bd257e5d95cbee906bb315dbb29b85b3a49c276015ff0572c8"}
+```
+
+**Now everyone can see it — no `author` needed:**
+```bash
+curl -G "http://localhost:8080/v1/skills" --data-urlencode "q=commit message"
+```
+Expected:
+```
+[{"name":"commit-message-writer","description":"Draft a conventional commit message from a summary of code changes","latest_version":1}]
+```
+
+**Promoting a name that's already shared is rejected, not silently merged:**
+```bash
+curl -X POST "http://localhost:8080/v1/skills/commit-message-writer/promote?author=alice"
+```
+Expected: `409` with
+```
+{"error":"'commit-message-writer' already exists in the shared catalog — promote rejected"}
+```
+
+**Promoting a name nobody has published privately:**
+```bash
+curl -X POST "http://localhost:8080/v1/skills/never-published-anywhere/promote?author=dave"
+```
+Expected: `404` with
+```
+{"error":"No personal skill named 'never-published-anywhere' for 'dave'"}
+```
+
+Through the MCP Adapter, the equivalent is `publish_skill` with a
+`visibility: "private"` argument, and a new `promote_skill` tool — see
+Configuration below. `search_skills` / `fetch_skill` / `skill_history`
+automatically include your own private skills without any extra argument,
+using the same identity as `publish_skill` (`JOSH_AUTHOR` / OS username).
 
 ## 2. Run the MCP Adapter
 
