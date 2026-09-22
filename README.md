@@ -4,7 +4,7 @@ A shared catalog that lets developers publish reusable AI-assistant "skills" and
 lets other developers discover and retrieve them through their own AI assistant
 — no file handoffs, no copy-pasting. This is a proof-of-concept implementation
 of the design in [`phase1_design_specifications.md`](phase1_design_specifications.md), which
-covers the full rationale for every choice below.
+covers the full rationale for every choice below. [`phase2_design_specifications.md`](phase2_design_specifiations.md) covers future improvements and considerations beyond this MVP.
 
 ## How it fits together
 
