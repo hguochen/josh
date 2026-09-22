@@ -36,31 +36,59 @@ final class CatalogClient {
         }
     }
 
-    HttpResult search(String query) {
-        URI uri = baseUri.resolve("/v1/skills?q=" + urlEncode(query));
-        return send(HttpRequest.newBuilder(uri).GET());
-    }
-
-    HttpResult retrieve(String name, Integer version) {
-        String path = "/v1/skills/" + urlEncode(name);
-        if (version != null) {
-            path += "?version=" + version;
+    /**
+     * {@code author}, when given, also surfaces that caller's own personal
+     * skills alongside the shared catalog (phase2_design_specification.md,
+     * Features) — never another developer's.
+     */
+    HttpResult search(String query, String author) {
+        String path = "/v1/skills?q=" + urlEncode(query);
+        if (author != null && !author.isBlank()) {
+            path += "&author=" + urlEncode(author);
         }
         return send(HttpRequest.newBuilder(baseUri.resolve(path)).GET());
     }
 
-    HttpResult history(String name) {
-        URI uri = baseUri.resolve("/v1/skills/" + urlEncode(name) + "/versions");
-        return send(HttpRequest.newBuilder(uri).GET());
+    HttpResult retrieve(String name, Integer version, String author) {
+        String path = "/v1/skills/" + urlEncode(name);
+        String query = "";
+        if (version != null) {
+            query += "version=" + version;
+        }
+        if (author != null && !author.isBlank()) {
+            query += (query.isEmpty() ? "" : "&") + "author=" + urlEncode(author);
+        }
+        if (!query.isEmpty()) {
+            path += "?" + query;
+        }
+        return send(HttpRequest.newBuilder(baseUri.resolve(path)).GET());
     }
 
-    HttpResult publish(byte[] archiveBytes, String author, String filename) {
+    HttpResult history(String name, String author) {
+        String path = "/v1/skills/" + urlEncode(name) + "/versions";
+        if (author != null && !author.isBlank()) {
+            path += "?author=" + urlEncode(author);
+        }
+        return send(HttpRequest.newBuilder(baseUri.resolve(path)).GET());
+    }
+
+    /** {@code visibility}: null/"shared" publishes to the shared catalog (default), "private" to the caller's own. */
+    HttpResult publish(byte[] archiveBytes, String author, String filename, String visibility) {
         String boundary = "----JoshBoundary" + new SecureRandom().nextLong();
-        byte[] body = buildMultipartBody(boundary, archiveBytes, author, filename);
+        byte[] body = buildMultipartBody(boundary, archiveBytes, author, filename, visibility);
 
         HttpRequest request = HttpRequest.newBuilder(baseUri.resolve("/v1/skills"))
             .header("Content-Type", "multipart/form-data; boundary=" + boundary)
             .POST(HttpRequest.BodyPublishers.ofByteArray(body))
+            .build();
+        return send(request);
+    }
+
+    /** phase2_design_specification.md Features: promote the caller's own latest personal version of {@code name} into shared. */
+    HttpResult promote(String name, String author) {
+        String path = "/v1/skills/" + urlEncode(name) + "/promote?author=" + urlEncode(author);
+        HttpRequest request = HttpRequest.newBuilder(baseUri.resolve(path))
+            .POST(HttpRequest.BodyPublishers.noBody())
             .build();
         return send(request);
     }
@@ -81,7 +109,7 @@ final class CatalogClient {
         }
     }
 
-    private byte[] buildMultipartBody(String boundary, byte[] archiveBytes, String author, String filename) {
+    private byte[] buildMultipartBody(String boundary, byte[] archiveBytes, String author, String filename, String visibility) {
         try {
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             String crlf = "\r\n";
@@ -89,6 +117,12 @@ final class CatalogClient {
             out.write(("--" + boundary + crlf).getBytes(StandardCharsets.UTF_8));
             out.write(("Content-Disposition: form-data; name=\"author\"" + crlf + crlf).getBytes(StandardCharsets.UTF_8));
             out.write((author + crlf).getBytes(StandardCharsets.UTF_8));
+
+            if (visibility != null && !visibility.isBlank()) {
+                out.write(("--" + boundary + crlf).getBytes(StandardCharsets.UTF_8));
+                out.write(("Content-Disposition: form-data; name=\"visibility\"" + crlf + crlf).getBytes(StandardCharsets.UTF_8));
+                out.write((visibility + crlf).getBytes(StandardCharsets.UTF_8));
+            }
 
             out.write(("--" + boundary + crlf).getBytes(StandardCharsets.UTF_8));
             out.write(("Content-Disposition: form-data; name=\"archive\"; filename=\"" + filename + "\"" + crlf)

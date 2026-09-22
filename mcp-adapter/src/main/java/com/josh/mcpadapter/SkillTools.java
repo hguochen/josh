@@ -31,7 +31,7 @@ final class SkillTools {
     }
 
     List<SyncToolSpecification> all() {
-        return List.of(searchSkills(), fetchSkill(), skillHistory(), publishSkill());
+        return List.of(searchSkills(), fetchSkill(), skillHistory(), publishSkill(), promoteSkill());
     }
 
     private SyncToolSpecification searchSkills() {
@@ -43,14 +43,14 @@ final class SkillTools {
                 )),
                 "required", List.of("query")
             ))
-            .description("Search the team's shared skills catalog (a separate system from Claude Code's own built-in Skills feature) for reusable AI-assistant instructions other developers have published. Use this whenever the user asks if a skill exists for some task, e.g. 'is there a skill for X?' Returns each match's name, description, and latest version.")
+            .description("Search the team's shared skills catalog (a separate system from Claude Code's own built-in Skills feature) for reusable AI-assistant instructions other developers have published, plus your own private skills. Use this whenever the user asks if a skill exists for some task, e.g. 'is there a skill for X?' Returns each match's name, description, and latest version.")
             .build();
 
         return SyncToolSpecification.builder()
             .tool(tool)
             .callHandler((exchange, request) -> {
                 String query = stringArg(request, "query");
-                CatalogClient.HttpResult result = client.search(query);
+                CatalogClient.HttpResult result = client.search(query, resolveAuthor());
                 if (result.status() != 200) {
                     return errorResult("Search failed (" + result.status() + "): " + result.bodyAsUtf8());
                 }
@@ -81,7 +81,7 @@ final class SkillTools {
                 ),
                 "required", List.of("name")
             ))
-            .description("Download a named skill from the team's shared skills catalog (not Claude Code's own built-in Skills feature) — the exact archive, verified byte-identical to what was published, plus its local path and manifest. Use this when the user asks to get/fetch/use a specific published skill by name.")
+            .description("Download a named skill from the team's shared skills catalog, or your own private skills (not Claude Code's own built-in Skills feature) — the exact archive, verified byte-identical to what was published, plus its local path and manifest. Use this when the user asks to get/fetch/use a specific published skill by name.")
             .build();
 
         return SyncToolSpecification.builder()
@@ -90,7 +90,7 @@ final class SkillTools {
                 String name = stringArg(request, "name");
                 Integer version = intArgOrNull(request, "version");
 
-                CatalogClient.HttpResult result = client.retrieve(name, version);
+                CatalogClient.HttpResult result = client.retrieve(name, version, resolveAuthor());
                 if (result.status() == 404) {
                     return errorResult(readErrorMessage(result));
                 }
@@ -125,14 +125,14 @@ final class SkillTools {
                 "properties", Map.of("name", Map.of("type", "string", "description", "The skill's name")),
                 "required", List.of("name")
             ))
-            .description("List all retained versions of a named skill in the team's shared skills catalog (not Claude Code's own built-in Skills feature), oldest first, with author and publish time.")
+            .description("List all retained versions of a named skill in the team's shared skills catalog, or your own private skills (not Claude Code's own built-in Skills feature), oldest first, with author and publish time.")
             .build();
 
         return SyncToolSpecification.builder()
             .tool(tool)
             .callHandler((exchange, request) -> {
                 String name = stringArg(request, "name");
-                CatalogClient.HttpResult result = client.history(name);
+                CatalogClient.HttpResult result = client.history(name, resolveAuthor());
                 if (result.status() == 404) {
                     return errorResult(readErrorMessage(result));
                 }
@@ -156,16 +156,25 @@ final class SkillTools {
     private SyncToolSpecification publishSkill() {
         Tool tool = Tool.builder("publish_skill", Map.of(
                 "type", "object",
-                "properties", Map.of("path", Map.of("type", "string", "description", "Local filesystem path to the skill directory")),
+                "properties", Map.of(
+                    "path", Map.of("type", "string", "description", "Local filesystem path to the skill directory"),
+                    "visibility", Map.of(
+                        "type", "string",
+                        "enum", List.of("shared", "private"),
+                        "description", "'shared' (default) publishes to the team catalog everyone can discover; "
+                            + "'private' publishes only to your own personal collection, visible to no one else"
+                    )
+                ),
                 "required", List.of("path")
             ))
-            .description("Publish a local skill directory (containing SKILL.md) to the team's shared skills catalog (not Claude Code's own built-in Skills feature), so other developers can discover and reuse it. Optional convenience tool; a CLI can also publish directly against the HTTP API.")
+            .description("Publish a local skill directory (containing SKILL.md) to the team's shared skills catalog, or to your own private collection (not Claude Code's own built-in Skills feature), so other developers can discover and reuse it. Optional convenience tool; a CLI can also publish directly against the HTTP API.")
             .build();
 
         return SyncToolSpecification.builder()
             .tool(tool)
             .callHandler((exchange, request) -> {
                 String pathArg = stringArg(request, "path");
+                String visibility = stringArg(request, "visibility");
                 Path skillDir = Paths.get(pathArg);
 
                 byte[] archiveBytes;
@@ -176,14 +185,41 @@ final class SkillTools {
                 }
 
                 String author = resolveAuthor();
-                CatalogClient.HttpResult result = client.publish(archiveBytes, author, skillDir.getFileName() + ".zip");
+                CatalogClient.HttpResult result = client.publish(archiveBytes, author, skillDir.getFileName() + ".zip", visibility);
                 if (result.status() != 201) {
                     return errorResult(readErrorMessage(result));
                 }
 
                 JsonNode published = jsonMapper.readTree(result.bodyAsUtf8());
+                String scopeLabel = "private".equalsIgnoreCase(visibility) ? "your private collection" : "the shared catalog";
                 return textResult("Published '" + published.get("name").asString() + "' as version "
-                    + published.get("version").asInt() + " (checksum " + published.get("checksum").asString() + ").");
+                    + published.get("version").asInt() + " to " + scopeLabel
+                    + " (checksum " + published.get("checksum").asString() + ").");
+            })
+            .build();
+    }
+
+    private SyncToolSpecification promoteSkill() {
+        Tool tool = Tool.builder("promote_skill", Map.of(
+                "type", "object",
+                "properties", Map.of("name", Map.of("type", "string", "description", "The name of your own private skill to promote")),
+                "required", List.of("name")
+            ))
+            .description("Move a skill from your own private collection into the team's shared skills catalog (not Claude Code's own built-in Skills feature), so other developers can discover it. Fails if that name already exists in the shared catalog.")
+            .build();
+
+        return SyncToolSpecification.builder()
+            .tool(tool)
+            .callHandler((exchange, request) -> {
+                String name = stringArg(request, "name");
+                CatalogClient.HttpResult result = client.promote(name, resolveAuthor());
+                if (result.status() != 201) {
+                    return errorResult(readErrorMessage(result));
+                }
+
+                JsonNode promoted = jsonMapper.readTree(result.bodyAsUtf8());
+                return textResult("Promoted '" + promoted.get("name").asString() + "' to the shared catalog as version "
+                    + promoted.get("version").asInt() + " (checksum " + promoted.get("checksum").asString() + ").");
             })
             .build();
     }
